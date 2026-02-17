@@ -48,3 +48,26 @@ export const updateProfileSchema = z.object({
 export const xpSchema = z.object({
   amount: z.coerce.number().min(1).max(1000)
 });
+
+export const forgotPasswordSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email address')
+  })
+});
+
+export const resetPasswordSchema = z.object({
+  params: z.object({
+    token: z.string().min(1, 'Reset token is required')
+  }),
+  body: z.object({
+    password: passwordSchema
+  })
+});
+
+export const changePasswordSchema = z.object({
+  body: z.object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: passwordSchema
+  })
+});
+

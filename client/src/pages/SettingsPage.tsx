@@ -27,6 +27,224 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Eye, EyeOff, Lock } from "lucide-react";
+
+// Change Password Component
+function ChangePasswordForm() {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const validatePassword = (pwd: string): boolean => {
+    const minLength = pwd.length >= 8;
+    const hasUpperCase = /[A-Z]/.test(pwd);
+    const hasLowerCase = /[a-z]/.test(pwd);
+    const hasNumber = /[0-9]/.test(pwd);
+    const hasSpecialChar = /[^A-Za-z0-9]/.test(pwd);
+    return minLength && hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar;
+  };
+
+  const getPasswordStrength = (pwd: string): string => {
+    if (pwd.length === 0) return "";
+    if (!validatePassword(pwd)) return "weak";
+    if (pwd.length >= 12) return "strong";
+    return "medium";
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    if (!validatePassword(newPassword)) {
+      toast.error(
+        "New password must be at least 8 characters with uppercase, lowercase, number, and special character"
+      );
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      toast.error("New password must be different from current password");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:5000/api/auth/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Password changed successfully!");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        toast.error(data.message || "Failed to change password");
+      }
+    } catch (error) {
+      toast.error("An error occurred. Please try again.");
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const strength = getPasswordStrength(newPassword);
+
+  return (
+    <form onSubmit={handleChangePassword} className="space-y-4">
+      <div>
+        <Label htmlFor="currentPassword">Current Password</Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            id="currentPassword"
+            type={showCurrentPassword ? "text" : "password"}
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Enter current password"
+            className="pl-10 pr-10"
+            disabled={isLoading}
+          />
+          <button
+            type="button"
+            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+            className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+          >
+            {showCurrentPassword ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="newPassword">New Password</Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            id="newPassword"
+            type={showNewPassword ? "text" : "password"}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="Enter new password"
+            className="pl-10 pr-10"
+            disabled={isLoading}
+          />
+          <button
+            type="button"
+            onClick={() => setShowNewPassword(!showNewPassword)}
+            className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+          >
+            {showNewPassword ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+        {newPassword && (
+          <div className="mt-2">
+            <div className="flex gap-1 mb-1">
+              <div
+                className={`h-1 flex-1 rounded ${
+                  strength === "weak"
+                    ? "bg-red-500"
+                    : strength === "medium"
+                    ? "bg-yellow-500"
+                    : "bg-green-500"
+                }`}
+              />
+              {strength !== "weak" && (
+                <div
+                  className={`h-1 flex-1 rounded ${
+                    strength === "strong" ? "bg-green-500" : "bg-yellow-500"
+                  }`}
+                />
+              )}
+              {strength === "strong" && (
+                <div className="h-1 flex-1 rounded bg-green-500" />
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Password strength:{" "}
+              <span
+                className={
+                  strength === "weak"
+                    ? "text-red-500"
+                    : strength === "medium"
+                    ? "text-yellow-500"
+                    : "text-green-500"
+                }
+              >
+                {strength}
+              </span>
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <Label htmlFor="confirmPassword">Confirm New Password</Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            id="confirmPassword"
+            type={showConfirmPassword ? "text" : "password"}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Confirm new password"
+            className="pl-10 pr-10"
+            disabled={isLoading}
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+          >
+            {showConfirmPassword ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      <Button type="submit" disabled={isLoading}>
+        {isLoading ? "Changing Password..." : "Change Password"}
+      </Button>
+    </form>
+  );
+}
+
 
 export default function Settings() {
   const { user, updateUser, logout } = useAuth();
@@ -150,6 +368,11 @@ export default function Settings() {
           </div>
           <Button onClick={handleSave}>Save Changes</Button>
         </div>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="text-xl font-bold mb-4">Security</h2>
+        <ChangePasswordForm />
       </Card>
 
       <Card className="p-6">

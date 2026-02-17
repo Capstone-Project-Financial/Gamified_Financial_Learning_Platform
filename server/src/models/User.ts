@@ -1,5 +1,6 @@
 import { Schema, model, Document, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export interface IUser {
   name: string;
@@ -14,10 +15,14 @@ export interface IUser {
   currentStreak: number;
   longestStreak: number;
   lastLogin: Date;
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
 }
 
 export interface IUserDocument extends IUser, Document {
   comparePassword(candidate: string): Promise<boolean>;
+  createPasswordResetToken(): string;
+  isResetTokenValid(): boolean;
 }
 
 interface IUserModel extends Model<IUserDocument> {}
@@ -35,7 +40,9 @@ const userSchema = new Schema<IUserDocument>(
     xp: { type: Number, default: 0 },
     currentStreak: { type: Number, default: 1 },
     longestStreak: { type: Number, default: 1 },
-    lastLogin: { type: Date, default: () => new Date() }
+    lastLogin: { type: Date, default: () => new Date() },
+    resetPasswordToken: { type: String, select: false },
+    resetPasswordExpires: { type: Date, select: false }
   },
   {
     timestamps: true,
@@ -57,6 +64,17 @@ userSchema.pre('save', async function (next) {
 
 userSchema.methods.comparePassword = function (candidate: string) {
   return bcrypt.compare(candidate, this.password);
+};
+
+userSchema.methods.createPasswordResetToken = function (): string {
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  this.resetPasswordExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  return resetToken;
+};
+
+userSchema.methods.isResetTokenValid = function (): boolean {
+  return this.resetPasswordExpires && this.resetPasswordExpires > new Date();
 };
 
 export const UserModel = model<IUserDocument, IUserModel>('User', userSchema);

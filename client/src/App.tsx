@@ -12,6 +12,8 @@ import { ProgressProvider } from "@/contexts/ProgressContext";
 import Landing from "@/pages/Landing";
 import Signup from "@/pages/Signup";
 import Login from "@/pages/Login";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/DashboardPage";
 import Wallet from "@/pages/WalletPage";
 import Learning from "@/pages/LearningPage";
@@ -46,6 +48,8 @@ const App = () => (
                     <Route path="/" element={<Landing />} />
                     <Route path="/signup" element={<Signup />} />
                     <Route path="/login" element={<Login />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password/:token" element={<ResetPassword />} />
                     <Route
                       path="/dashboard"
                       element={
