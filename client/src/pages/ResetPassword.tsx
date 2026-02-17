@@ -9,6 +9,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { toast } from "sonner";
 import { Lock, Eye, EyeOff } from "lucide-react";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 const ResetPassword = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -59,7 +61,7 @@ const ResetPassword = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/auth/reset-password/${token}`,
+        `${API_BASE_URL}/auth/reset-password/${token}`,
         {
           method: "POST",
           headers: {
