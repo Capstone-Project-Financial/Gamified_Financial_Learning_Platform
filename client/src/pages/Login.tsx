@@ -25,11 +25,13 @@ const Login = () => {
       return;
     }
 
-    const success = await login(email, password);
-    if (success) {
-      toast.success("Welcome back!");
-      navigate("/dashboard");
-    } else {
+    try {
+      const result = await login(email, password);
+      if (result.requiresOtp) {
+        toast.success("Verification code sent to your email");
+        navigate("/verify-otp", { state: { email, password, flow: "login" } });
+      }
+    } catch {
       toast.error("Invalid email or password");
     }
   };

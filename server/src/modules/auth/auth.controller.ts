@@ -6,31 +6,64 @@ import asyncHandler from '../../utils/asyncHandler';
 import sendSuccess from '../../utils/response';
 import { UserModel } from '../../models/User';
 import { addXpToUser, ensureUserCompanions, sanitizeUser, signToken, updateLoginStreak } from './auth.service';
-import { sendPasswordResetEmail } from '../../utils/email.service';
+import { sendPasswordResetEmail, sendOtpEmail } from '../../utils/email.service';
+
+/* ── Pending signup store (in-memory, TTL 10 min) ── */
+interface PendingSignup {
+  userData: {
+    name: string;
+    email: string;
+    password: string;
+    age?: number;
+    grade?: string;
+    school?: string;
+  };
+  hashedOtp: string;
+  expires: Date;
+}
+const pendingSignups = new Map<string, PendingSignup>();
+
+// Clean up expired entries periodically
+setInterval(() => {
+  const now = new Date();
+  for (const [email, entry] of pendingSignups.entries()) {
+    if (entry.expires < now) pendingSignups.delete(email);
+  }
+}, 5 * 60 * 1000); // every 5 minutes
+
+/* ── Helpers ── */
+const generateOtp = (): { otp: string; hashedOtp: string } => {
+  const otp = String(Math.floor(1000000 + Math.random() * 9000000)); // 7-digit
+  const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+  return { otp, hashedOtp };
+};
+
+/* ── Controllers ── */
 
 export const signup = asyncHandler(async (req: Request, res: Response) => {
-  const existing = await UserModel.findOne({ email: req.body.email.toLowerCase() });
+  const { name, email, password, age, grade, school } = req.body;
+
+  const existing = await UserModel.findOne({ email: email.toLowerCase() });
   if (existing) {
     throw new ApiError(409, 'Email already in use');
   }
 
-  const user = await UserModel.create({ ...req.body, email: req.body.email.toLowerCase() });
-  await ensureUserCompanions(user.id);
+  const { otp, hashedOtp } = generateOtp();
+  const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
-  const token = signToken(user.id);
-  return sendSuccess(
-    res,
-    {
-      token,
-      user: sanitizeUser(user)
-    },
-    'Account created',
-    201
-  );
+  pendingSignups.set(email.toLowerCase(), {
+    userData: { name, email: email.toLowerCase(), password, age, grade, school },
+    hashedOtp,
+    expires
+  });
+
+  await sendOtpEmail(email, otp, name, 'signup');
+
+  return sendSuccess(res, { requiresOtp: true, flow: 'signup' }, 'Verification code sent to your email', 200);
 });
 
 export const login = asyncHandler(async (req: Request, res: Response) => {
-  const user = await UserModel.findOne({ email: req.body.email.toLowerCase() }).select('+password');
+  const user = await UserModel.findOne({ email: req.body.email.toLowerCase() }).select('+password +loginOtp +loginOtpExpires');
   if (!user) {
     throw new ApiError(401, 'Invalid credentials');
   }
@@ -40,12 +73,95 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(401, 'Invalid credentials');
   }
 
+  const otp = user.createLoginOtp();
+  await user.save({ validateBeforeSave: false });
+
+  await sendOtpEmail(user.email, otp, user.name, 'login');
+
+  return sendSuccess(res, { requiresOtp: true, flow: 'login' }, 'Verification code sent to your email', 200);
+});
+
+export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
+  const { email, otp, flow } = req.body;
+  const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+  if (flow === 'signup') {
+    const pending = pendingSignups.get(email.toLowerCase());
+    if (!pending) {
+      throw new ApiError(400, 'No pending signup found. Please sign up again.');
+    }
+    if (pending.expires < new Date()) {
+      pendingSignups.delete(email.toLowerCase());
+      throw new ApiError(400, 'Verification code has expired. Please sign up again.');
+    }
+    if (pending.hashedOtp !== hashedOtp) {
+      throw new ApiError(400, 'Invalid verification code');
+    }
+
+    // Create the user account
+    const user = await UserModel.create(pending.userData);
+    pendingSignups.delete(email.toLowerCase());
+    await ensureUserCompanions(user.id);
+
+    const token = signToken(user.id);
+    return sendSuccess(res, { token, user: sanitizeUser(user) }, 'Account created successfully', 201);
+  }
+
+  // flow === 'login'
+  const user = await UserModel.findOne({ email: email.toLowerCase() }).select('+loginOtp +loginOtpExpires');
+  if (!user) {
+    throw new ApiError(400, 'Invalid or expired verification code');
+  }
+  if (!user.loginOtp || !user.loginOtpExpires || user.loginOtpExpires < new Date()) {
+    throw new ApiError(400, 'Verification code has expired. Please log in again.');
+  }
+  if (user.loginOtp !== hashedOtp) {
+    throw new ApiError(400, 'Invalid verification code');
+  }
+
+  // Clear OTP and complete login
+  user.loginOtp = undefined;
+  user.loginOtpExpires = undefined;
   updateLoginStreak(user);
-  await user.save();
+  await user.save({ validateBeforeSave: false });
   await ensureUserCompanions(user.id);
 
   const token = signToken(user.id);
   return sendSuccess(res, { token, user: sanitizeUser(user) }, 'Login successful');
+});
+
+export const resendOtp = asyncHandler(async (req: Request, res: Response) => {
+  const { email, flow, password } = req.body;
+
+  if (flow === 'signup') {
+    const pending = pendingSignups.get(email.toLowerCase());
+    if (!pending) {
+      throw new ApiError(400, 'No pending signup found. Please sign up again.');
+    }
+    const { otp, hashedOtp } = generateOtp();
+    pending.hashedOtp = hashedOtp;
+    pending.expires = new Date(Date.now() + 10 * 60 * 1000);
+    await sendOtpEmail(email, otp, pending.userData.name, 'signup');
+    return sendSuccess(res, { ok: true }, 'New verification code sent');
+  }
+
+  // flow === 'login' — re-validate password before resending
+  if (!password) {
+    throw new ApiError(400, 'Password is required to resend login OTP');
+  }
+  const user = await UserModel.findOne({ email: email.toLowerCase() }).select('+password +loginOtp +loginOtpExpires');
+  if (!user) {
+    throw new ApiError(401, 'Invalid credentials');
+  }
+  const isValid = await user.comparePassword(password);
+  if (!isValid) {
+    throw new ApiError(401, 'Invalid credentials');
+  }
+
+  const otp = user.createLoginOtp();
+  await user.save({ validateBeforeSave: false });
+  await sendOtpEmail(user.email, otp, user.name, 'login');
+  return sendSuccess(res, { ok: true }, 'New verification code sent');
 });
 
 export const getProfile = asyncHandler(async (req: Request, res: Response) => {
@@ -145,4 +261,3 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
 
   return sendSuccess(res, { ok: true }, 'Password changed successfully');
 });
-

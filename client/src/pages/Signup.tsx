@@ -99,8 +99,8 @@ const Signup = () => {
         formData.password
       );
 
-      toast.success("Account created successfully!");
-      navigate("/dashboard");
+      toast.success("Verification code sent to your email");
+      navigate("/verify-otp", { state: { email: formData.email, flow: "signup" } });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Signup failed");
     }

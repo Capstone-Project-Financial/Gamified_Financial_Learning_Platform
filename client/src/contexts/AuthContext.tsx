@@ -27,7 +27,7 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ requiresOtp: boolean }>;
   signup: (
     userData: {
       name: string;
@@ -38,7 +38,9 @@ interface AuthContextType {
       knowledgeLevel?: string;
     },
     password: string
-  ) => Promise<void>;
+  ) => Promise<{ requiresOtp: boolean }>;
+  verifyOtp: (email: string, otp: string, flow: "login" | "signup") => Promise<boolean>;
+  resendOtp: (email: string, flow: "login" | "signup", password?: string) => Promise<void>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => Promise<void>;
   addXP: (amount: number) => Promise<void>;
@@ -72,18 +74,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   /* ── Auth actions ── */
-  const login = async (email: string, password: string): Promise<boolean> => {
-    try {
-      const data = await api.post<{ token: string; user: User }>(
-        "/auth/login",
-        { email, password }
-      );
-      setToken(data.token);
-      setUser(data.user);
-      return true;
-    } catch {
-      return false;
-    }
+  const login = async (email: string, password: string): Promise<{ requiresOtp: boolean }> => {
+    await api.post("/auth/login", { email, password });
+    return { requiresOtp: true };
   };
 
   const signup = async (
@@ -96,13 +89,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       knowledgeLevel?: string;
     },
     password: string
-  ) => {
-    const data = await api.post<{ token: string; user: User }>(
-      "/auth/signup",
-      { ...userData, password }
-    );
-    setToken(data.token);
-    setUser(data.user);
+  ): Promise<{ requiresOtp: boolean }> => {
+    await api.post("/auth/signup", { ...userData, password });
+    return { requiresOtp: true };
+  };
+
+  const verifyOtp = async (
+    email: string,
+    otp: string,
+    flow: "login" | "signup"
+  ): Promise<boolean> => {
+    try {
+      const data = await api.post<{ token: string; user: User }>(
+        "/auth/verify-otp",
+        { email, otp, flow }
+      );
+      setToken(data.token);
+      setUser(data.user);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const resendOtp = async (
+    email: string,
+    flow: "login" | "signup",
+    password?: string
+  ): Promise<void> => {
+    await api.post("/auth/resend-otp", { email, flow, password });
   };
 
   const logout = () => {
@@ -122,7 +137,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, signup, logout, updateUser, addXP }}
+      value={{ user, loading, login, signup, verifyOtp, resendOtp, logout, updateUser, addXP }}
     >
       {children}
     </AuthContext.Provider>

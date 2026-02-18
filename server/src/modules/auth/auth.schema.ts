@@ -62,3 +62,14 @@ export const changePasswordSchema = z.object({
   newPassword: passwordSchema
 });
 
+export const verifyOtpSchema = z.object({
+  email: z.string().email('Invalid email address').trim().toLowerCase(),
+  otp: z.string().length(7, 'OTP must be exactly 7 digits').regex(/^\d{7}$/, 'OTP must contain only digits'),
+  flow: z.enum(['login', 'signup'])
+});
+
+export const resendOtpSchema = z.object({
+  email: z.string().email('Invalid email address').trim().toLowerCase(),
+  flow: z.enum(['login', 'signup']),
+  password: z.string().optional()
+});

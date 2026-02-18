@@ -17,12 +17,15 @@ export interface IUser {
   lastLogin: Date;
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
+  loginOtp?: string;
+  loginOtpExpires?: Date;
 }
 
 export interface IUserDocument extends IUser, Document {
   comparePassword(candidate: string): Promise<boolean>;
   createPasswordResetToken(): string;
   isResetTokenValid(): boolean;
+  createLoginOtp(): string;
 }
 
 interface IUserModel extends Model<IUserDocument> {}
@@ -42,7 +45,9 @@ const userSchema = new Schema<IUserDocument>(
     longestStreak: { type: Number, default: 1 },
     lastLogin: { type: Date, default: () => new Date() },
     resetPasswordToken: { type: String, select: false },
-    resetPasswordExpires: { type: Date, select: false }
+    resetPasswordExpires: { type: Date, select: false },
+    loginOtp: { type: String, select: false },
+    loginOtpExpires: { type: Date, select: false }
   },
   {
     timestamps: true,
@@ -75,6 +80,13 @@ userSchema.methods.createPasswordResetToken = function (): string {
 
 userSchema.methods.isResetTokenValid = function (): boolean {
   return this.resetPasswordExpires && this.resetPasswordExpires > new Date();
+};
+
+userSchema.methods.createLoginOtp = function (): string {
+  const otp = String(Math.floor(1000000 + Math.random() * 9000000)); // 7-digit
+  this.loginOtp = crypto.createHash('sha256').update(otp).digest('hex');
+  this.loginOtpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  return otp;
 };
 
 export const UserModel = model<IUserDocument, IUserModel>('User', userSchema);
