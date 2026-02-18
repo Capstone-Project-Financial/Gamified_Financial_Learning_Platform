@@ -99,17 +99,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     otp: string,
     flow: "login" | "signup"
   ): Promise<boolean> => {
-    try {
-      const data = await api.post<{ token: string; user: User }>(
-        "/auth/verify-otp",
-        { email, otp, flow }
-      );
-      setToken(data.token);
-      setUser(data.user);
-      return true;
-    } catch {
-      return false;
-    }
+    const data = await api.post<{ token: string; user: User }>(
+      "/auth/verify-otp",
+      { email, otp, flow }
+    );
+    setToken(data.token);
+    setUser(data.user);
+    return true;
   };
 
   const resendOtp = async (

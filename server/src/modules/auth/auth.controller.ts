@@ -83,11 +83,13 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   // If a valid OTP already exists (not expired), don't generate a new one.
   // This prevents race conditions from double-clicks overwriting the OTP in DB.
   if (user.loginOtp && user.loginOtpExpires && user.loginOtpExpires > new Date()) {
+    console.log(`[OTP-DEBUG] Login: Reusing existing OTP for ${req.body.email}. Stored hash: ${user.loginOtp}`);
     return sendSuccess(res, { requiresOtp: true, flow: 'login' }, 'Verification code already sent. Please check your email.', 200);
   }
 
   const otp = user.createLoginOtp();
   await user.save({ validateBeforeSave: false });
+  console.log(`[OTP-DEBUG] Login: Generated NEW OTP for ${req.body.email}. New stored hash: ${user.loginOtp}`);
 
   await sendOtpEmail(user.email, otp, user.name, 'login');
 
@@ -99,6 +101,7 @@ export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
   const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
 
   console.log(`[OTP-DEBUG] Verifying OTP for: ${email} (${flow})`);
+  console.log(`[OTP-DEBUG] Raw OTP received: "${otp}" (length: ${otp.length})`);
   console.log(`[OTP-DEBUG] Input OTP Hash: ${hashedOtp}`);
 
   if (flow === 'signup') {
@@ -163,6 +166,13 @@ export const resendOtp = asyncHandler(async (req: Request, res: Response) => {
     if (!pending) {
       throw new ApiError(400, 'No pending signup found. Please sign up again.');
     }
+    // Cooldown: only allow resend if the OTP was sent more than 60 seconds ago
+    const sentAgo = (pending.expires.getTime() - 10 * 60 * 1000); // when it was created
+    const secondsSinceSent = (Date.now() - sentAgo) / 1000;
+    if (secondsSinceSent < 60) {
+      const waitSeconds = Math.ceil(60 - secondsSinceSent);
+      throw new ApiError(429, `Please wait ${waitSeconds} seconds before requesting a new code.`);
+    }
     const { otp, hashedOtp } = generateOtp();
     pending.hashedOtp = hashedOtp;
     pending.expires = new Date(Date.now() + 10 * 60 * 1000);
@@ -181,6 +191,16 @@ export const resendOtp = asyncHandler(async (req: Request, res: Response) => {
   const isValid = await user.comparePassword(password);
   if (!isValid) {
     throw new ApiError(401, 'Invalid credentials');
+  }
+
+  // Cooldown: only allow resend if the OTP was sent more than 60 seconds ago
+  if (user.loginOtp && user.loginOtpExpires) {
+    const sentAgo = user.loginOtpExpires.getTime() - 10 * 60 * 1000; // when it was created
+    const secondsSinceSent = (Date.now() - sentAgo) / 1000;
+    if (secondsSinceSent < 60) {
+      const waitSeconds = Math.ceil(60 - secondsSinceSent);
+      throw new ApiError(429, `Please wait ${waitSeconds} seconds before requesting a new code.`);
+    }
   }
 
   const otp = user.createLoginOtp();

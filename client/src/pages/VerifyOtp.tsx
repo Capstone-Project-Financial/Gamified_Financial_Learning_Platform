@@ -19,6 +19,7 @@ const VerifyOtp = () => {
   const [resending, setResending] = useState(false);
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const isSubmittingRef = useRef(false); // prevent double auto-submit
   const navigate = useNavigate();
   const location = useLocation();
   const { verifyOtp, resendOtp } = useAuth();
@@ -82,23 +83,27 @@ const VerifyOtp = () => {
     }
     if (!state) return;
 
+    // Prevent double-submission (auto-submit effect can fire multiple times)
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     setLoading(true);
     try {
-      const success = await verifyOtp(state.email, code, state.flow);
-      if (success) {
-        toast.success(
-          state.flow === "signup"
-            ? "Account created! Welcome to FinLearn!"
-            : "Welcome back!"
-        );
-        navigate("/dashboard");
-      } else {
-        toast.error("Invalid or expired verification code");
-        setOtp(Array(7).fill(""));
-        inputRefs.current[0]?.focus();
-      }
+      await verifyOtp(state.email, code, state.flow);
+      toast.success(
+        state.flow === "signup"
+          ? "Account created! Welcome to FinLearn!"
+          : "Welcome back!"
+      );
+      navigate("/dashboard");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Invalid or expired verification code";
+      toast.error(message);
+      setOtp(Array(7).fill(""));
+      inputRefs.current[0]?.focus();
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   }, [otp, state, verifyOtp, navigate]);
 

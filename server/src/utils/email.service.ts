@@ -251,7 +251,12 @@ export const sendOtpEmail = async (
   const actionLabel = flow === 'signup' ? 'verify your email address' : 'complete your login';
   const titleLabel  = flow === 'signup' ? 'Verify Your Email' : 'Login Verification';
 
-  const text = `Hi ${userName},\n\nYour FinLearn verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.\n\nFinLearn Team`;
+  // Add a timestamp so the user can identify the latest email in their inbox
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'UTC' }) + ' UTC';
+
+  const text = `Hi ${userName},\n\nYour FinLearn verification code is: ${otp}\n\nThis code expires in 10 minutes. If you have multiple emails from us, please use THIS one (sent at ${timeStr}) and discard the others.\n\nIf you did not request this, please ignore this email.\n\nFinLearn Team`;
+
 
   const html = `
     <!DOCTYPE html>
@@ -353,7 +358,7 @@ export const sendOtpEmail = async (
 
   return sendEmail({
     to: email,
-    subject: `${titleLabel} - FinLearn`,
+    subject: `${titleLabel} - FinLearn (sent at ${timeStr})`,
     text,
     html
   });
