@@ -7,7 +7,7 @@ import { calculateLevel } from '../../utils/gamification';
 import { UserModel, IUserDocument } from '../../models/User';
 import { WalletModel } from '../../models/Wallet';
 import { ProgressModel } from '../../models/Progress';
-import { buildAchievementState } from '../../data/achievements';
+import { buildAchievementStateFromDB } from '../learning/learning.service';
 
 export const signToken = (userId: string) => {
   const payload = { sub: userId };
@@ -22,6 +22,7 @@ export const sanitizeUser = (user: IUserDocument) => {
 };
 
 export const ensureUserCompanions = async (userId: string) => {
+  const achievementState = await buildAchievementStateFromDB();
   await Promise.all([
     WalletModel.findOneAndUpdate(
       { user: userId },
@@ -36,7 +37,7 @@ export const ensureUserCompanions = async (userId: string) => {
       { user: userId },
       {
         $setOnInsert: {
-          achievements: buildAchievementState()
+          achievements: achievementState
         }
       },
       {

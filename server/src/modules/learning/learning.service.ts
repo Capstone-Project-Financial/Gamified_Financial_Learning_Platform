@@ -7,8 +7,10 @@ import { LessonModel } from '../../models/Lesson';
 import { QuizModel } from '../../models/Quiz';
 import { AchievementModel } from '../../models/Achievement';
 
-// Cache for modules (since they don't change often)
+// Cache for modules with 5-minute TTL
 let modulesCache: any[] | null = null;
+let modulesCacheTime: number = 0;
+const MODULES_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 export const getProgressForUser = async (userId: string) => {
   const progress =
@@ -32,11 +34,13 @@ export const buildAchievementStateFromDB = async () => {
 export const listModulesWithProgress = async (userId: string) => {
   const progress = await getProgressForUser(userId);
   
-  // Use cache if available, otherwise fetch from DB
-  if (!modulesCache) {
+  // Use cache if available and not expired, otherwise fetch from DB
+  const now = Date.now();
+  if (!modulesCache || now - modulesCacheTime > MODULES_CACHE_TTL_MS) {
     modulesCache = await ModuleModel.find({ isActive: true })
       .sort({ order: 1 })
       .lean();
+    modulesCacheTime = now;
   }
   
   return { modules: modulesCache, progress };
