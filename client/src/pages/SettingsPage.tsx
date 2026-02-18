@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import api from "@/services/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,33 +84,17 @@ function ChangePasswordForm() {
     setIsLoading(true);
 
     try {
-      const token = localStorage.getItem("token");
-      const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          currentPassword,
-          newPassword,
-        }),
+      await api.post("/auth/change-password", {
+        currentPassword,
+        newPassword,
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success("Password changed successfully!");
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      } else {
-        toast.error(data.message || "Failed to change password");
-      }
+      toast.success("Password changed successfully!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
     } catch (error) {
-      toast.error("An error occurred. Please try again.");
-      console.error(error);
+      toast.error(error instanceof Error ? error.message : "Failed to change password");
     } finally {
       setIsLoading(false);
     }
