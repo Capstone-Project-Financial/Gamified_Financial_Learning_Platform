@@ -85,16 +85,24 @@ export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
   const { email, otp, flow } = req.body;
   const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
 
+  console.log(`[OTP-DEBUG] Verifying OTP for: ${email} (${flow})`);
+  console.log(`[OTP-DEBUG] Input OTP Hash: ${hashedOtp}`);
+
   if (flow === 'signup') {
     const pending = pendingSignups.get(email.toLowerCase());
     if (!pending) {
+      console.log(`[OTP-DEBUG] No pending signup found for ${email}`);
       throw new ApiError(400, 'No pending signup found. Please sign up again.');
     }
+    
+    console.log(`[OTP-DEBUG] Pending Signup Found. Stored OTP Hash: ${pending.hashedOtp}`);
+    
     if (pending.expires < new Date()) {
       pendingSignups.delete(email.toLowerCase());
       throw new ApiError(400, 'Verification code has expired. Please sign up again.');
     }
     if (pending.hashedOtp !== hashedOtp) {
+      console.log(`[OTP-DEBUG] Hash Mismatch! Input: ${hashedOtp} vs Stored: ${pending.hashedOtp}`);
       throw new ApiError(400, 'Invalid verification code');
     }
 
@@ -112,10 +120,14 @@ export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
   if (!user) {
     throw new ApiError(400, 'Invalid or expired verification code');
   }
+  
+  console.log(`[OTP-DEBUG] Login User Found. Stored OTP Hash: ${user.loginOtp}`);
+
   if (!user.loginOtp || !user.loginOtpExpires || user.loginOtpExpires < new Date()) {
     throw new ApiError(400, 'Verification code has expired. Please log in again.');
   }
   if (user.loginOtp !== hashedOtp) {
+    console.log(`[OTP-DEBUG] Hash Mismatch! Input: ${hashedOtp} vs Stored: ${user.loginOtp}`);
     throw new ApiError(400, 'Invalid verification code');
   }
 
