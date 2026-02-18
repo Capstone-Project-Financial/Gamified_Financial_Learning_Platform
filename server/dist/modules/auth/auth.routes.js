@@ -1,0 +1,23 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const validate_1 = __importDefault(require("../../middleware/validate"));
+const auth_1 = require("../../middleware/auth");
+const auth_schema_1 = require("./auth.schema");
+const auth_controller_1 = require("./auth.controller");
+const router = (0, express_1.Router)();
+router.post('/signup', (0, validate_1.default)(auth_schema_1.signupSchema), auth_controller_1.signup);
+router.post('/login', (0, validate_1.default)(auth_schema_1.loginSchema), auth_controller_1.login);
+router.post('/verify-otp', (0, validate_1.default)(auth_schema_1.verifyOtpSchema), auth_controller_1.verifyOtp);
+router.post('/resend-otp', (0, validate_1.default)(auth_schema_1.resendOtpSchema), auth_controller_1.resendOtp);
+router.get('/me', auth_1.authenticate, auth_controller_1.getProfile);
+router.post('/logout', auth_1.authenticate, auth_controller_1.logout);
+router.patch('/me', auth_1.authenticate, (0, validate_1.default)(auth_schema_1.updateProfileSchema), auth_controller_1.updateProfile);
+router.post('/xp', auth_1.authenticate, (0, validate_1.default)(auth_schema_1.xpSchema), auth_controller_1.addXp);
+router.post('/forgot-password', (0, validate_1.default)(auth_schema_1.forgotPasswordSchema), auth_controller_1.forgotPassword);
+router.post('/reset-password/:token', (0, validate_1.default)(auth_schema_1.resetPasswordSchema), auth_controller_1.resetPassword);
+router.post('/change-password', auth_1.authenticate, (0, validate_1.default)(auth_schema_1.changePasswordSchema), auth_controller_1.changePassword);
+exports.default = router;

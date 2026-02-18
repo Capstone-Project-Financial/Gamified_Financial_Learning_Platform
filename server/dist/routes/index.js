@@ -1,0 +1,22 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_routes_1 = __importDefault(require("../modules/auth/auth.routes"));
+const learning_routes_1 = __importDefault(require("../modules/learning/learning.routes"));
+const wallet_routes_1 = __importDefault(require("../modules/wallet/wallet.routes"));
+const stocks_routes_1 = __importDefault(require("../modules/stocks/stocks.routes"));
+const achievements_routes_1 = __importDefault(require("../modules/achievements/achievements.routes"));
+const leaderboard_routes_1 = __importDefault(require("../modules/leaderboard/leaderboard.routes"));
+const testimonials_routes_1 = __importDefault(require("../modules/testimonials/testimonials.routes"));
+const router = (0, express_1.Router)();
+router.use('/auth', auth_routes_1.default);
+router.use('/learning', learning_routes_1.default);
+router.use('/wallet', wallet_routes_1.default);
+router.use('/stocks', stocks_routes_1.default);
+router.use('/achievements', achievements_routes_1.default);
+router.use('/leaderboard', leaderboard_routes_1.default);
+router.use('/testimonials', testimonials_routes_1.default);
+exports.default = router;
