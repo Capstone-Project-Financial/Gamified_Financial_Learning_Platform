@@ -14,6 +14,7 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -25,6 +26,9 @@ const Login = () => {
       return;
     }
 
+    if (isLoading) return;
+    setIsLoading(true);
+
     try {
       const result = await login(email, password);
       if (result.requiresOtp) {
@@ -33,6 +37,8 @@ const Login = () => {
       }
     } catch {
       toast.error("Invalid email or password");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -96,8 +102,9 @@ const Login = () => {
             type="submit"
             className="w-full bg-primary hover:bg-primary/90"
             size="lg"
+            disabled={isLoading}
           >
-            Login
+            {isLoading ? "Sending code..." : "Login"}
           </Button>
         </form>
 

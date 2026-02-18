@@ -48,6 +48,13 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(409, 'Email already in use');
   }
 
+  // If a valid pending signup already exists for this email, don't overwrite it.
+  // This prevents double-click race conditions from generating two different OTPs.
+  const existingPending = pendingSignups.get(email.toLowerCase());
+  if (existingPending && existingPending.expires > new Date()) {
+    return sendSuccess(res, { requiresOtp: true, flow: 'signup' }, 'Verification code already sent. Please check your email.', 200);
+  }
+
   const { otp, hashedOtp } = generateOtp();
   const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
@@ -71,6 +78,12 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   const isValid = await user.comparePassword(req.body.password);
   if (!isValid) {
     throw new ApiError(401, 'Invalid credentials');
+  }
+
+  // If a valid OTP already exists (not expired), don't generate a new one.
+  // This prevents race conditions from double-clicks overwriting the OTP in DB.
+  if (user.loginOtp && user.loginOtpExpires && user.loginOtpExpires > new Date()) {
+    return sendSuccess(res, { requiresOtp: true, flow: 'login' }, 'Verification code already sent. Please check your email.', 200);
   }
 
   const otp = user.createLoginOtp();

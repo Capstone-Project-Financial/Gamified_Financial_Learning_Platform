@@ -15,6 +15,7 @@ import { ArrowRight, ArrowLeft } from "lucide-react";
 
 const Signup = () => {
   const [step, setStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -88,6 +89,8 @@ const Signup = () => {
   };
 
   const handleSubmit = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
     try {
       await signup(
         {
@@ -103,6 +106,8 @@ const Signup = () => {
       navigate("/verify-otp", { state: { email: formData.email, flow: "signup" } });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Signup failed");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -250,8 +255,9 @@ const Signup = () => {
               onClick={handleSubmit}
               size="lg"
               className="w-full bg-primary hover:bg-primary/90"
+              disabled={isLoading}
             >
-              Let's Begin! <ArrowRight className="ml-2" />
+              {isLoading ? "Sending code..." : <span>Let's Begin! <ArrowRight className="ml-2 inline" /></span>}
             </Button>
           </div>
         )}
