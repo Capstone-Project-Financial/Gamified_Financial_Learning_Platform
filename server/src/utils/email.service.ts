@@ -1,4 +1,3 @@
-import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 
 interface EmailOptions {
@@ -8,33 +7,14 @@ interface EmailOptions {
   html: string;
 }
 
-// Create reusable transporter
-const createTransporter = () => {
-  // If email credentials are configured, use them
-  if (env.EMAIL_HOST && env.EMAIL_USER && env.EMAIL_PASSWORD) {
-    return nodemailer.createTransport({
-      host: env.EMAIL_HOST,
-      port: parseInt(env.EMAIL_PORT || '587'),
-      secure: env.EMAIL_PORT === '465',
-      auth: {
-        user: env.EMAIL_USER,
-        pass: env.EMAIL_PASSWORD
-      }
-    });
-  }
-  
-  // For development, return null (we'll log to console instead)
-  return null;
-};
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
-  const transporter = createTransporter();
-  
-  if (!transporter) {
-    // In development without email config, log to console
-    console.log('\n=================================');
-    console.log('📧 EMAIL (Development Mode)');
-    console.log('=================================');
+  const apiKey = env.BREVO_API_KEY || env.EMAIL_PASSWORD;
+
+  if (!apiKey) {
+    // Development fallback — log to console
+    console.log('\n================================= EMAIL (Dev Mode)');
     console.log(`To: ${options.to}`);
     console.log(`Subject: ${options.subject}`);
     console.log(`\n${options.text}\n`);
@@ -43,38 +23,38 @@ export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
   }
 
   try {
-    console.log('\n🔄 Attempting to send email via Brevo...');
-    console.log('Email Config:', {
-      host: env.EMAIL_HOST,
-      port: env.EMAIL_PORT,
-      user: env.EMAIL_USER,
-      from: env.EMAIL_FROM || env.EMAIL_USER,
-      to: options.to,
-      subject: options.subject
+    console.log('Sending email via Brevo HTTP API to:', options.to);
+
+    const response = await fetch(BREVO_API_URL, {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: {
+          name: 'FinLearn',
+          email: 'finnlearnofficial@gmail.com'
+        },
+        to: [{ email: options.to }],
+        subject: options.subject,
+        textContent: options.text,
+        htmlContent: options.html
+      })
     });
 
-    const info = await transporter.sendMail({
-      from: env.EMAIL_FROM || env.EMAIL_USER,
-      to: options.to,
-      subject: options.subject,
-      text: options.text,
-      html: options.html
-    });
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('Brevo API error:', response.status, errorBody);
+      return false;
+    }
 
-    console.log('✅ Email sent successfully!');
-    console.log('Message ID:', info.messageId);
-    console.log('Response:', info.response);
-    console.log('=================================\n');
-    
+    const result = await response.json() as { messageId?: string };
+    console.log('Email sent successfully. Message ID:', result.messageId);
     return true;
   } catch (error) {
-    console.error('\n❌ Email sending failed!');
-    console.error('Error details:', error);
-    if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-    }
-    console.error('=================================\n');
+    console.error('Email sending failed:', error instanceof Error ? error.message : error);
     return false;
   }
 };

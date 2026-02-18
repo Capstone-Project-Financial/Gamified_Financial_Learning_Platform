@@ -15,6 +15,7 @@ const envSchema = zod_1.z.object({
     EMAIL_PORT: zod_1.z.string().optional(),
     EMAIL_USER: zod_1.z.string().optional(),
     EMAIL_PASSWORD: zod_1.z.string().optional(),
-    EMAIL_FROM: zod_1.z.string().optional()
+    EMAIL_FROM: zod_1.z.string().optional(),
+    BREVO_API_KEY: zod_1.z.string().optional()
 });
 exports.env = envSchema.parse(process.env);

@@ -1,35 +1,13 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendOtpEmail = exports.sendPasswordResetEmail = exports.sendEmail = void 0;
-const nodemailer_1 = __importDefault(require("nodemailer"));
 const env_1 = require("../config/env");
-// Create reusable transporter
-const createTransporter = () => {
-    // If email credentials are configured, use them
-    if (env_1.env.EMAIL_HOST && env_1.env.EMAIL_USER && env_1.env.EMAIL_PASSWORD) {
-        return nodemailer_1.default.createTransport({
-            host: env_1.env.EMAIL_HOST,
-            port: parseInt(env_1.env.EMAIL_PORT || '587'),
-            secure: env_1.env.EMAIL_PORT === '465',
-            auth: {
-                user: env_1.env.EMAIL_USER,
-                pass: env_1.env.EMAIL_PASSWORD
-            }
-        });
-    }
-    // For development, return null (we'll log to console instead)
-    return null;
-};
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 const sendEmail = async (options) => {
-    const transporter = createTransporter();
-    if (!transporter) {
-        // In development without email config, log to console
-        console.log('\n=================================');
-        console.log('📧 EMAIL (Development Mode)');
-        console.log('=================================');
+    const apiKey = env_1.env.BREVO_API_KEY || env_1.env.EMAIL_PASSWORD;
+    if (!apiKey) {
+        // Development fallback — log to console
+        console.log('\n================================= EMAIL (Dev Mode)');
         console.log(`To: ${options.to}`);
         console.log(`Subject: ${options.subject}`);
         console.log(`\n${options.text}\n`);
@@ -37,36 +15,36 @@ const sendEmail = async (options) => {
         return true;
     }
     try {
-        console.log('\n🔄 Attempting to send email via Brevo...');
-        console.log('Email Config:', {
-            host: env_1.env.EMAIL_HOST,
-            port: env_1.env.EMAIL_PORT,
-            user: env_1.env.EMAIL_USER,
-            from: env_1.env.EMAIL_FROM || env_1.env.EMAIL_USER,
-            to: options.to,
-            subject: options.subject
+        console.log('Sending email via Brevo HTTP API to:', options.to);
+        const response = await fetch(BREVO_API_URL, {
+            method: 'POST',
+            headers: {
+                'accept': 'application/json',
+                'api-key': apiKey,
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                sender: {
+                    name: 'FinLearn',
+                    email: 'finnlearnofficial@gmail.com'
+                },
+                to: [{ email: options.to }],
+                subject: options.subject,
+                textContent: options.text,
+                htmlContent: options.html
+            })
         });
-        const info = await transporter.sendMail({
-            from: env_1.env.EMAIL_FROM || env_1.env.EMAIL_USER,
-            to: options.to,
-            subject: options.subject,
-            text: options.text,
-            html: options.html
-        });
-        console.log('✅ Email sent successfully!');
-        console.log('Message ID:', info.messageId);
-        console.log('Response:', info.response);
-        console.log('=================================\n');
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error('Brevo API error:', response.status, errorBody);
+            return false;
+        }
+        const result = await response.json();
+        console.log('Email sent successfully. Message ID:', result.messageId);
         return true;
     }
     catch (error) {
-        console.error('\n❌ Email sending failed!');
-        console.error('Error details:', error);
-        if (error instanceof Error) {
-            console.error('Error message:', error.message);
-            console.error('Error stack:', error.stack);
-        }
-        console.error('=================================\n');
+        console.error('Email sending failed:', error instanceof Error ? error.message : error);
         return false;
     }
 };
