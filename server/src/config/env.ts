@@ -10,12 +10,10 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   CLIENT_URL: z.string().optional(),
-  EMAIL_HOST: z.string().optional(),
-  EMAIL_PORT: z.string().optional(),
-  EMAIL_USER: z.string().optional(),
-  EMAIL_PASSWORD: z.string().optional(),
-  EMAIL_FROM: z.string().optional(),
-  BREVO_API_KEY: z.string().optional()
+  BREVO_API_KEY: z.string().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CALLBACK_URL: z.string().optional().default('http://localhost:5000/api/auth/google/callback')
 });
 
 export const env = envSchema.parse(process.env);

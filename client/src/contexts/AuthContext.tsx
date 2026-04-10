@@ -22,6 +22,8 @@ export interface User {
   longestStreak: number;
   createdAt: string;
   lastLogin: string;
+  authProvider?: 'local' | 'google';
+  avatar?: string;
 }
 
 interface AuthContextType {
@@ -41,6 +43,8 @@ interface AuthContextType {
   ) => Promise<{ requiresOtp: boolean }>;
   verifyOtp: (email: string, otp: string, flow: "login" | "signup") => Promise<boolean>;
   resendOtp: (email: string, flow: "login" | "signup", password?: string) => Promise<void>;
+  loginWithGoogle: () => void;
+  refreshUser: () => Promise<void>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => Promise<void>;
   addXP: (amount: number) => Promise<void>;
@@ -121,6 +125,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
   };
 
+  const loginWithGoogle = () => {
+    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    window.location.href = `${apiBase}/auth/google`;
+  };
+
+  const refreshUser = async () => {
+    const userData = await api.get<User>("/auth/me");
+    setUser(userData);
+  };
+
   const updateUser = async (updates: Partial<User>) => {
     const updated = await api.patch<User>("/auth/me", updates);
     setUser(updated);
@@ -133,7 +147,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, signup, verifyOtp, resendOtp, logout, updateUser, addXP }}
+      value={{ user, loading, login, signup, verifyOtp, resendOtp, loginWithGoogle, refreshUser, logout, updateUser, addXP }}
     >
       {children}
     </AuthContext.Provider>

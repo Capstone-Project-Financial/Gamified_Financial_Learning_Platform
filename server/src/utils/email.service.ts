@@ -10,7 +10,7 @@ interface EmailOptions {
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
-  const apiKey = env.BREVO_API_KEY || env.EMAIL_PASSWORD;
+  const apiKey = env.BREVO_API_KEY;
 
   if (!apiKey) {
     // Development fallback — log to console

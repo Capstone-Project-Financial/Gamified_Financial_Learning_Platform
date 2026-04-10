@@ -5,7 +5,10 @@ import crypto from 'crypto';
 export interface IUser {
   name: string;
   email: string;
-  password: string;
+  password?: string;
+  googleId?: string;
+  authProvider: 'local' | 'google';
+  avatar?: string;
   age?: number;
   grade?: string;
   school?: string;
@@ -34,7 +37,10 @@ const userSchema = new Schema<IUserDocument>(
   {
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true, lowercase: true },
-    password: { type: String, required: true, select: false },
+    password: { type: String, select: false },
+    googleId: { type: String, unique: true, sparse: true },
+    authProvider: { type: String, enum: ['local', 'google'], default: 'local' },
+    avatar: String,
     age: Number,
     grade: String,
     school: String,
@@ -61,7 +67,7 @@ const userSchema = new Schema<IUserDocument>(
 );
 
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();

@@ -15,6 +15,7 @@ import Login from "@/pages/Login";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import VerifyOtp from "@/pages/VerifyOtp";
+import OAuthCallback from "@/pages/OAuthCallback";
 import Dashboard from "@/pages/DashboardPage";
 import Wallet from "@/pages/WalletPage";
 import Learning from "@/pages/LearningPage";
@@ -52,6 +53,7 @@ const App = () => (
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/reset-password/:token" element={<ResetPassword />} />
                     <Route path="/verify-otp" element={<VerifyOtp />} />
+                    <Route path="/oauth/callback" element={<OAuthCallback />} />
                     <Route
                       path="/dashboard"
                       element={
