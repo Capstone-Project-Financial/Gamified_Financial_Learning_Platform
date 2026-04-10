@@ -12,8 +12,10 @@ const Module_1 = require("../../models/Module");
 const Lesson_1 = require("../../models/Lesson");
 const Quiz_1 = require("../../models/Quiz");
 const Achievement_1 = require("../../models/Achievement");
-// Cache for modules (since they don't change often)
+// Cache for modules with 5-minute TTL
 let modulesCache = null;
+let modulesCacheTime = 0;
+const MODULES_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const getProgressForUser = async (userId) => {
     const progress = (await Progress_1.ProgressModel.findOne({ user: userId })) ||
         (await Progress_1.ProgressModel.create({
@@ -26,7 +28,12 @@ exports.getProgressForUser = getProgressForUser;
 const buildAchievementStateFromDB = async () => {
     const achievements = await Achievement_1.AchievementModel.find({ isActive: true }).lean();
     return achievements.map((achievement) => ({
-        ...achievement,
+        id: achievement.achievementId,
+        name: achievement.name,
+        description: achievement.description,
+        icon: achievement.icon,
+        xpReward: achievement.xpReward,
+        total: achievement.total,
         unlocked: false,
         progress: 0
     }));
@@ -34,11 +41,13 @@ const buildAchievementStateFromDB = async () => {
 exports.buildAchievementStateFromDB = buildAchievementStateFromDB;
 const listModulesWithProgress = async (userId) => {
     const progress = await (0, exports.getProgressForUser)(userId);
-    // Use cache if available, otherwise fetch from DB
-    if (!modulesCache) {
+    // Use cache if available and not expired, otherwise fetch from DB
+    const now = Date.now();
+    if (!modulesCache || now - modulesCacheTime > MODULES_CACHE_TTL_MS) {
         modulesCache = await Module_1.ModuleModel.find({ isActive: true })
             .sort({ order: 1 })
             .lean();
+        modulesCacheTime = now;
     }
     return { modules: modulesCache, progress };
 };

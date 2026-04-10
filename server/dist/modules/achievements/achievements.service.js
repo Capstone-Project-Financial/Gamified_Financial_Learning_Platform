@@ -9,6 +9,16 @@ const achievements_1 = require("../../data/achievements");
 const ensureAchievementSlots = (progress) => {
     if (!progress)
         return;
+    // Repair existing entries that were saved with `achievementId` instead of `id`
+    for (const achievement of progress.achievements) {
+        if (!achievement.id && achievement.achievementId) {
+            achievement.id = achievement.achievementId;
+            delete achievement.achievementId;
+        }
+    }
+    // Remove entries that still have no `id` (completely broken)
+    progress.achievements = progress.achievements.filter((a) => !!a.id);
+    // Add any missing achievement slots
     achievements_1.achievementTemplates.forEach((template) => {
         const exists = progress.achievements.find((a) => a.id === template.id);
         if (!exists) {

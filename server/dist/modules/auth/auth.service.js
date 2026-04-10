@@ -12,7 +12,7 @@ const gamification_1 = require("../../utils/gamification");
 const User_1 = require("../../models/User");
 const Wallet_1 = require("../../models/Wallet");
 const Progress_1 = require("../../models/Progress");
-const achievements_1 = require("../../data/achievements");
+const learning_service_1 = require("../learning/learning.service");
 const signToken = (userId) => {
     const payload = { sub: userId };
     const secret = env_1.env.JWT_SECRET;
@@ -26,6 +26,7 @@ const sanitizeUser = (user) => {
 };
 exports.sanitizeUser = sanitizeUser;
 const ensureUserCompanions = async (userId) => {
+    const achievementState = await (0, learning_service_1.buildAchievementStateFromDB)();
     await Promise.all([
         Wallet_1.WalletModel.findOneAndUpdate({ user: userId }, {}, {
             upsert: true,
@@ -34,7 +35,7 @@ const ensureUserCompanions = async (userId) => {
         }),
         Progress_1.ProgressModel.findOneAndUpdate({ user: userId }, {
             $setOnInsert: {
-                achievements: (0, achievements_1.buildAchievementState)()
+                achievements: achievementState
             }
         }, {
             upsert: true,

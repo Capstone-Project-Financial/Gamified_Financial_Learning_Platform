@@ -50,7 +50,6 @@ const AchievementSchema = new mongoose_1.Schema({
     },
     isActive: { type: Boolean, default: true }
 }, { timestamps: true });
-// Indexes for efficient queries
-AchievementSchema.index({ achievementId: 1 });
+// Indexes for efficient queries (achievementId already indexed via unique: true)
 AchievementSchema.index({ category: 1, isActive: 1 });
 exports.AchievementModel = mongoose_1.default.model('Achievement', AchievementSchema);

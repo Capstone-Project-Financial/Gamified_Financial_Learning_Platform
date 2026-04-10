@@ -33,6 +33,12 @@ exports.signup = (0, asyncHandler_1.default)(async (req, res) => {
     if (existing) {
         throw new ApiError_1.default(409, 'Email already in use');
     }
+    // If a valid pending signup already exists for this email, don't overwrite it.
+    // This prevents double-click race conditions from generating two different OTPs.
+    const existingPending = pendingSignups.get(email.toLowerCase());
+    if (existingPending && existingPending.expires > new Date()) {
+        return (0, response_1.default)(res, { requiresOtp: true, flow: 'signup' }, 'Verification code already sent. Please check your email.', 200);
+    }
     const { otp, hashedOtp } = generateOtp();
     const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
     pendingSignups.set(email.toLowerCase(), {
@@ -52,24 +58,37 @@ exports.login = (0, asyncHandler_1.default)(async (req, res) => {
     if (!isValid) {
         throw new ApiError_1.default(401, 'Invalid credentials');
     }
+    // If a valid OTP already exists (not expired), don't generate a new one.
+    // This prevents race conditions from double-clicks overwriting the OTP in DB.
+    if (user.loginOtp && user.loginOtpExpires && user.loginOtpExpires > new Date()) {
+        console.log(`[OTP-DEBUG] Login: Reusing existing OTP for ${req.body.email}. Stored hash: ${user.loginOtp}`);
+        return (0, response_1.default)(res, { requiresOtp: true, flow: 'login' }, 'Verification code already sent. Please check your email.', 200);
+    }
     const otp = user.createLoginOtp();
     await user.save({ validateBeforeSave: false });
+    console.log(`[OTP-DEBUG] Login: Generated NEW OTP for ${req.body.email}. New stored hash: ${user.loginOtp}`);
     await (0, email_service_1.sendOtpEmail)(user.email, otp, user.name, 'login');
     return (0, response_1.default)(res, { requiresOtp: true, flow: 'login' }, 'Verification code sent to your email', 200);
 });
 exports.verifyOtp = (0, asyncHandler_1.default)(async (req, res) => {
     const { email, otp, flow } = req.body;
     const hashedOtp = crypto_1.default.createHash('sha256').update(otp).digest('hex');
+    console.log(`[OTP-DEBUG] Verifying OTP for: ${email} (${flow})`);
+    console.log(`[OTP-DEBUG] Raw OTP received: "${otp}" (length: ${otp.length})`);
+    console.log(`[OTP-DEBUG] Input OTP Hash: ${hashedOtp}`);
     if (flow === 'signup') {
         const pending = pendingSignups.get(email.toLowerCase());
         if (!pending) {
+            console.log(`[OTP-DEBUG] No pending signup found for ${email}`);
             throw new ApiError_1.default(400, 'No pending signup found. Please sign up again.');
         }
+        console.log(`[OTP-DEBUG] Pending Signup Found. Stored OTP Hash: ${pending.hashedOtp}`);
         if (pending.expires < new Date()) {
             pendingSignups.delete(email.toLowerCase());
             throw new ApiError_1.default(400, 'Verification code has expired. Please sign up again.');
         }
         if (pending.hashedOtp !== hashedOtp) {
+            console.log(`[OTP-DEBUG] Hash Mismatch! Input: ${hashedOtp} vs Stored: ${pending.hashedOtp}`);
             throw new ApiError_1.default(400, 'Invalid verification code');
         }
         // Create the user account
@@ -84,10 +103,12 @@ exports.verifyOtp = (0, asyncHandler_1.default)(async (req, res) => {
     if (!user) {
         throw new ApiError_1.default(400, 'Invalid or expired verification code');
     }
+    console.log(`[OTP-DEBUG] Login User Found. Stored OTP Hash: ${user.loginOtp}`);
     if (!user.loginOtp || !user.loginOtpExpires || user.loginOtpExpires < new Date()) {
         throw new ApiError_1.default(400, 'Verification code has expired. Please log in again.');
     }
     if (user.loginOtp !== hashedOtp) {
+        console.log(`[OTP-DEBUG] Hash Mismatch! Input: ${hashedOtp} vs Stored: ${user.loginOtp}`);
         throw new ApiError_1.default(400, 'Invalid verification code');
     }
     // Clear OTP and complete login
@@ -106,6 +127,13 @@ exports.resendOtp = (0, asyncHandler_1.default)(async (req, res) => {
         if (!pending) {
             throw new ApiError_1.default(400, 'No pending signup found. Please sign up again.');
         }
+        // Cooldown: only allow resend if the OTP was sent more than 60 seconds ago
+        const sentAgo = (pending.expires.getTime() - 10 * 60 * 1000); // when it was created
+        const secondsSinceSent = (Date.now() - sentAgo) / 1000;
+        if (secondsSinceSent < 60) {
+            const waitSeconds = Math.ceil(60 - secondsSinceSent);
+            throw new ApiError_1.default(429, `Please wait ${waitSeconds} seconds before requesting a new code.`);
+        }
         const { otp, hashedOtp } = generateOtp();
         pending.hashedOtp = hashedOtp;
         pending.expires = new Date(Date.now() + 10 * 60 * 1000);
@@ -123,6 +151,15 @@ exports.resendOtp = (0, asyncHandler_1.default)(async (req, res) => {
     const isValid = await user.comparePassword(password);
     if (!isValid) {
         throw new ApiError_1.default(401, 'Invalid credentials');
+    }
+    // Cooldown: only allow resend if the OTP was sent more than 60 seconds ago
+    if (user.loginOtp && user.loginOtpExpires) {
+        const sentAgo = user.loginOtpExpires.getTime() - 10 * 60 * 1000; // when it was created
+        const secondsSinceSent = (Date.now() - sentAgo) / 1000;
+        if (secondsSinceSent < 60) {
+            const waitSeconds = Math.ceil(60 - secondsSinceSent);
+            throw new ApiError_1.default(429, `Please wait ${waitSeconds} seconds before requesting a new code.`);
+        }
     }
     const otp = user.createLoginOtp();
     await user.save({ validateBeforeSave: false });
