@@ -49,7 +49,6 @@ const QuizSchema = new mongoose_1.Schema({
     xpPerQuestion: { type: Number, default: 10 },
     isActive: { type: Boolean, default: true }
 }, { timestamps: true });
-// Index for faster queries
-QuizSchema.index({ moduleId: 1 });
+// Index for faster queries (moduleId already indexed via unique: true)
 QuizSchema.index({ isActive: 1 });
 exports.QuizModel = mongoose_1.default.model('Quiz', QuizSchema);

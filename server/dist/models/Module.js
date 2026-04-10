@@ -50,7 +50,6 @@ const ModuleSchema = new mongoose_1.Schema({
     lessons: [LessonSchema],
     isActive: { type: Boolean, default: true }
 }, { timestamps: true });
-// Index for faster queries
-ModuleSchema.index({ moduleId: 1 });
+// Index for faster queries (moduleId already indexed via unique: true)
 ModuleSchema.index({ isActive: 1, order: 1 });
 exports.ModuleModel = mongoose_1.default.model('Module', ModuleSchema);

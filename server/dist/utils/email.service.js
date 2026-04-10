@@ -4,7 +4,7 @@ exports.sendOtpEmail = exports.sendPasswordResetEmail = exports.sendEmail = void
 const env_1 = require("../config/env");
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 const sendEmail = async (options) => {
-    const apiKey = env_1.env.BREVO_API_KEY || env_1.env.EMAIL_PASSWORD;
+    const apiKey = env_1.env.BREVO_API_KEY;
     if (!apiKey) {
         // Development fallback — log to console
         console.log('\n================================= EMAIL (Dev Mode)');
@@ -228,7 +228,10 @@ exports.sendPasswordResetEmail = sendPasswordResetEmail;
 const sendOtpEmail = async (email, otp, userName, flow = 'login') => {
     const actionLabel = flow === 'signup' ? 'verify your email address' : 'complete your login';
     const titleLabel = flow === 'signup' ? 'Verify Your Email' : 'Login Verification';
-    const text = `Hi ${userName},\n\nYour FinLearn verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.\n\nFinLearn Team`;
+    // Add a timestamp so the user can identify the latest email in their inbox
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'UTC' }) + ' UTC';
+    const text = `Hi ${userName},\n\nYour FinLearn verification code is: ${otp}\n\nThis code expires in 10 minutes. If you have multiple emails from us, please use THIS one (sent at ${timeStr}) and discard the others.\n\nIf you did not request this, please ignore this email.\n\nFinLearn Team`;
     const html = `
     <!DOCTYPE html>
     <html lang="en">
@@ -328,7 +331,7 @@ const sendOtpEmail = async (email, otp, userName, flow = 'login') => {
   `;
     return (0, exports.sendEmail)({
         to: email,
-        subject: `${titleLabel} - FinLearn`,
+        subject: `${titleLabel} - FinLearn (sent at ${timeStr})`,
         text,
         html
     });
