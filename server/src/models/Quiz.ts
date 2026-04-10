@@ -37,8 +37,7 @@ const QuizSchema = new Schema<IQuiz>(
   { timestamps: true }
 );
 
-// Index for faster queries
-QuizSchema.index({ moduleId: 1 });
+// Index for faster queries (moduleId already indexed via unique: true)
 QuizSchema.index({ isActive: 1 });
 
 export const QuizModel = mongoose.model<IQuiz>('Quiz', QuizSchema);

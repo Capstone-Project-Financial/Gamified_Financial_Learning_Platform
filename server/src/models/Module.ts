@@ -39,8 +39,7 @@ const ModuleSchema = new Schema<IModule>(
   { timestamps: true }
 );
 
-// Index for faster queries
-ModuleSchema.index({ moduleId: 1 });
+// Index for faster queries (moduleId already indexed via unique: true)
 ModuleSchema.index({ isActive: 1, order: 1 });
 
 export const ModuleModel = mongoose.model<IModule>('Module', ModuleSchema);
