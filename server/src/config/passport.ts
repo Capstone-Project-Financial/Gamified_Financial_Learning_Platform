@@ -13,13 +13,30 @@ export const initializePassport = () => {
     return;
   }
 
+  // Warn if callback URL looks like localhost in production
+  if (env.NODE_ENV === 'production' && env.GOOGLE_CALLBACK_URL.includes('localhost')) {
+    logger.warn(
+      'GOOGLE_CALLBACK_URL is set to a localhost URL in production — Google OAuth will likely fail. ' +
+      'Set GOOGLE_CALLBACK_URL to your production server URL (e.g. https://your-api.onrender.com/api/auth/google/callback).'
+    );
+  }
+
+  // Warn if CLIENT_URL looks like localhost in production (affects OAuth redirect after auth)
+  if (env.NODE_ENV === 'production' && (!env.CLIENT_URL || env.CLIENT_URL.includes('localhost'))) {
+    logger.warn(
+      'CLIENT_URL is not set or is a localhost URL in production — Google OAuth success/failure ' +
+      'redirects will go to localhost. Set CLIENT_URL to your production frontend URL (e.g. https://your-app.netlify.app).'
+    );
+  }
+
   passport.use(
     new GoogleStrategy(
       {
         clientID: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
         callbackURL: env.GOOGLE_CALLBACK_URL,
-        scope: ['profile', 'email']
+        scope: ['profile', 'email'],
+        proxy: true
       },
       async (_accessToken, _refreshToken, profile, done) => {
         try {

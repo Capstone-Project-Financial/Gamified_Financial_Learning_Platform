@@ -52,7 +52,13 @@ router.get(
 
 router.get(
   '/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: '/login' }),
+  (req, res, next) => {
+    const clientUrl = env.CLIENT_URL || 'http://localhost:5173';
+    passport.authenticate('google', {
+      session: false,
+      failureRedirect: `${clientUrl}/login?error=oauth_failed`
+    })(req, res, next);
+  },
   (req, res) => {
     const user = req.user as { id: string } | undefined;
     if (!user) {
