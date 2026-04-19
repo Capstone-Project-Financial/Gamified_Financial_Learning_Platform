@@ -8,6 +8,7 @@ import achievementRoutes from '../modules/achievements/achievements.routes';
 import leaderboardRoutes from '../modules/leaderboard/leaderboard.routes';
 import testimonialsRoutes from '../modules/testimonials/testimonials.routes';
 import battleRoutes from '../modules/battle/battle.routes';
+import budgetSimulatorRoutes from '../modules/budget-simulator/budget-simulator.routes';
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use('/achievements', achievementRoutes);
 router.use('/leaderboard', leaderboardRoutes);
 router.use('/testimonials', testimonialsRoutes);
 router.use('/battle', battleRoutes);
+router.use('/budget-simulator', budgetSimulatorRoutes);
 
 export default router;

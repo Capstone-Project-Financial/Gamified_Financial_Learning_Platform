@@ -30,6 +30,7 @@ import BattleArena from "@/pages/BattleArenaPage";
 import BattleResults from "@/pages/BattleResultsPage";
 import Tools from "@/pages/ToolsPage";
 import Settings from "@/pages/SettingsPage";
+import BudgetSimulator from "@/pages/BudgetSimulatorPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -155,6 +156,14 @@ const App = () => (
                         element={
                           <ProtectedRoute>
                             <Settings />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/budget-simulator"
+                        element={
+                          <ProtectedRoute>
+                            <BudgetSimulator />
                           </ProtectedRoute>
                         }
                       />

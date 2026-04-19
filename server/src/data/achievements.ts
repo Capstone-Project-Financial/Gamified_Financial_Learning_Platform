@@ -19,8 +19,16 @@ export const achievementTemplates: AchievementTemplate[] = [
   { id: 'battle-victor', name: 'Battle Victor', description: 'Win 10 quiz battles', icon: '⚔️', xpReward: 200, total: 10 }
 ];
 
+import { budgetSimulatorAchievements } from './budget-simulator-achievements';
+
+// Merge budget-simulator achievements into the main template array
+export const allAchievementTemplates: AchievementTemplate[] = [
+  ...achievementTemplates,
+  ...budgetSimulatorAchievements
+];
+
 export const buildAchievementState = () =>
-  achievementTemplates.map((achievement) => ({
+  allAchievementTemplates.map((achievement) => ({
     ...achievement,
     unlocked: false,
     progress: 0

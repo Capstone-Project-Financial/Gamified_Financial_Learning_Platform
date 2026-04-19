@@ -4,7 +4,7 @@ import { ProgressModel, IProgressDocument } from '../../models/Progress';
 import { WalletModel } from '../../models/Wallet';
 import { HoldingModel, StockModel } from '../../models/Stock';
 import { UserModel } from '../../models/User';
-import { achievementTemplates } from '../../data/achievements';
+import { allAchievementTemplates as achievementTemplates } from '../../data/achievements';
 
 const ensureAchievementSlots = (progress: IProgressDocument | null) => {
   if (!progress) return;

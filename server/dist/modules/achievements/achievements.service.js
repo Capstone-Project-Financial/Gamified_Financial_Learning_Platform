@@ -19,7 +19,7 @@ const ensureAchievementSlots = (progress) => {
     // Remove entries that still have no `id` (completely broken)
     progress.achievements = progress.achievements.filter((a) => !!a.id);
     // Add any missing achievement slots
-    achievements_1.achievementTemplates.forEach((template) => {
+    achievements_1.allAchievementTemplates.forEach((template) => {
         const exists = progress.achievements.find((a) => a.id === template.id);
         if (!exists) {
             progress.achievements.push({
