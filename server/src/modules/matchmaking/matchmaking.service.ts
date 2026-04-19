@@ -240,6 +240,15 @@ async function createMatchedBattle(
     // Select adaptive questions
     const questions = await selectAdaptiveQuestions(player1.userId, player2.userId, 10);
 
+    if (questions.length === 0) {
+      logger.error({ p1: player1.userId, p2: player2.userId }, 'No questions available for battle');
+      const redis = getRedisClient();
+      await redis.srem(ACTIVE_KEY, player1.userId, player2.userId);
+      emitToUser(player1.userId, 'queue_error', { message: 'No questions available. Please try again later.' });
+      emitToUser(player2.userId, 'queue_error', { message: 'No questions available. Please try again later.' });
+      return;
+    }
+
     const runtimeQuestions: BattleQuestionRuntime[] = questions.map((q) => ({
       questionId: q._id?.toString() ?? q.id,
       questionText: q.questionText,
