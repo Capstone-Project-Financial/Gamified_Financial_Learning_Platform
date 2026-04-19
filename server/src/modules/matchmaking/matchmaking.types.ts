@@ -34,7 +34,7 @@ export const MATCHMAKING_CONFIG = {
   },
   /** Initial thresholds */
   THRESHOLDS: {
-    LEVEL_DIFF: 0,           // exact match initially
+    LEVEL_DIFF: 2,           // allow ±2 level difference initially
     XP_RATIO: 0.2,           // ±20%
     ELO_DIFF: 200,           // ±200 points
   },

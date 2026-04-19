@@ -208,6 +208,14 @@ async function startBattleFromRoom(room: IBattleRoom): Promise<void> {
       room.config.totalQuestions
     );
 
+    if (questions.length === 0) {
+      logger.error({ roomId: room.id }, 'No questions available for room battle');
+      for (const p of room.players) {
+        emitToUser(p.userId.toString(), 'room_error', { message: 'No questions available. Please try again later.' });
+      }
+      return;
+    }
+
     const runtimeQuestions: BattleQuestionRuntime[] = questions.map((q) => ({
       questionId: q._id?.toString() ?? q.id,
       questionText: q.questionText,

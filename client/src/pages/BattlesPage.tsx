@@ -36,7 +36,7 @@ const BattlesPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { connected } = useSocket();
-  const { state, joinQueue, leaveQueue: _, createRoom, joinRoom, setReady, leaveRoom, reset } = useBattle();
+  const { state, joinQueue, leaveQueue, createRoom, joinRoom, setReady, leaveRoom, reset } = useBattle();
   const [history, setHistory] = useState<BattleHistoryItem[]>([]);
   const [analytics, setAnalytics] = useState<BattleAnalytics | null>(null);
   const [leaderboard, setLeaderboard] = useState<BattleLeaderboardEntry[]>([]);

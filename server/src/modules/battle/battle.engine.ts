@@ -54,7 +54,7 @@ export class BattleEngine {
         eloRatingBefore: p.eloRating,
         score: 0,
         answeredQuestions: new Set(),
-        connected: true,
+        connected: false,
         forfeited: false,
         disconnectTimer: null,
         answers: [],
