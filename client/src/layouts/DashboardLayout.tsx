@@ -12,6 +12,7 @@ import {
   Trophy,
   Swords,
   Calculator,
+  PiggyBank,
   BarChart3,
   Settings,
   LogOut,

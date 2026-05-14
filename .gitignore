@@ -62,5 +62,18 @@ client/.env
 client/.vite/
 
 # Claude Code (personal/local files)
+CLAUDE.md
 CLAUDE.local.md
 .claude/
+
+# Generated docs / personal notes
+BUDGET_SIMULATOR_GUIDE.md
+patent_annexure_extracted.txt
+
+# Gemini / Antigravity tool files
+.gemini/
+
+# One-off test/debug scripts
+server/fix-db.js
+server/test-api.js
+server/test-gemini.js
