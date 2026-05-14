@@ -28,7 +28,6 @@ const menuItems = [
   { icon: Trophy, label: "Achievements", path: "/achievements" },
   { icon: Swords, label: "Quiz Battles", path: "/battles" },
   { icon: Calculator, label: "Financial Tools", path: "/tools" },
-  { icon: PiggyBank, label: "Budget Simulator", path: "/budget-simulator" },
   { icon: BarChart3, label: "Leaderboard", path: "/leaderboard" },
   { icon: Settings, label: "Settings", path: "/settings" },
 ];

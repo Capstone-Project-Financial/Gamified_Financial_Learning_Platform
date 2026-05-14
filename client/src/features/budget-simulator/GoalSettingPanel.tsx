@@ -1,7 +1,8 @@
 /** @format */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useBudgetSimulator } from "@/contexts/BudgetSimulatorContext";
+import { api } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,43 @@ export default function GoalSettingPanel() {
 
   const goals = simulation?.goals || [];
   const maxGoals = 5;
+
+  // AI Suggestions
+  const [aiSuggestions, setAiSuggestions] = useState<Array<{ name: string; type: string; targetAmount: number; reason: string }>>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+  const fetchAISuggestions = async () => {
+    if (!simulation) return;
+    setLoadingSuggestions(true);
+    try {
+      const result = await api.get<any>(`/budget-simulator/simulation/${simulation._id}/ai-goal-suggestions`);
+      if (result?.data && Array.isArray(result.data)) {
+        setAiSuggestions(result.data);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  const quickAddGoal = async (suggestion: { name: string; type: string; targetAmount: number }) => {
+    setLoading(true);
+    try {
+      await addGoal({
+        name: suggestion.name,
+        type: suggestion.type,
+        targetAmount: suggestion.targetAmount,
+        priority: "medium",
+      });
+      toast.success(`Goal "${suggestion.name}" added!`);
+      setAiSuggestions(prev => prev.filter(s => s.name !== suggestion.name));
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add goal");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const resetForm = () => {
     setName("");
@@ -114,6 +152,52 @@ export default function GoalSettingPanel() {
           </Button>
         )}
       </div>
+
+      {/* AI Goal Suggestions */}
+      {goals.length < maxGoals && (
+        <Card className="border-purple-700/40 bg-gradient-to-br from-purple-950/30 to-indigo-950/20 backdrop-blur-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2 text-purple-300">
+              <span>✨</span> AI-Suggested Goals
+            </CardTitle>
+            <CardDescription className="text-xs">Personalized goals based on your financial profile</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {aiSuggestions.length === 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchAISuggestions}
+                disabled={loadingSuggestions}
+                className="w-full border-purple-700/40 hover:bg-purple-900/20"
+              >
+                {loadingSuggestions ? "Generating..." : "Get AI Suggestions"}
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                {aiSuggestions.map((s, i) => (
+                  <div key={i} className="p-3 rounded-lg bg-muted/30 flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{s.name}</p>
+                      <p className="text-xs text-muted-foreground">{s.reason}</p>
+                      <div className="flex gap-2 mt-1">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-400">{s.type.replace(/_/g, " ")}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-900/40 text-green-400">₹{s.targetAmount.toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="secondary" onClick={() => quickAddGoal(s)} disabled={loading} className="text-xs">
+                      <Plus className="h-3 w-3 mr-1" /> Add
+                    </Button>
+                  </div>
+                ))}
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-purple-800/60 text-purple-300 border border-purple-600/30">
+                  Powered by Gemini AI
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Add Goal Form */}
       {showForm && (

@@ -369,7 +369,7 @@ export interface ITriggeredEvent {
     optionId: string;
     label: string;
     description: string;
-    immediateEffect: { balance?: number; savings?: number; debt?: number };
+    immediateEffect: { balance?: number; savings?: number; debt?: number; investment?: number };
     futureEffect?: {
       monthsAffected: number;
       monthlyImpact: number;
@@ -389,7 +389,7 @@ export interface IMadeDecision {
   eventId: string;
   optionId: string;
   label: string;
-  immediateEffect: { balance?: number; savings?: number; debt?: number };
+  immediateEffect: { balance?: number; savings?: number; debt?: number; investment?: number };
   futureEffect?: {
     monthsAffected: number;
     monthlyImpact: number;
@@ -413,7 +413,8 @@ const madeDecisionSchema = new Schema<IMadeDecision>(
     immediateEffect: {
       balance: Number,
       savings: Number,
-      debt: Number
+      debt: Number,
+      investment: Number
     },
     futureEffect: {
       monthsAffected: Number,
@@ -438,7 +439,8 @@ const dynamicOptionSchema = new Schema(
     immediateEffect: {
       balance: Number,
       savings: Number,
-      debt: Number
+      debt: Number,
+      investment: Number
     },
     futureEffect: {
       monthsAffected: Number,
@@ -514,6 +516,38 @@ const healthBreakdownSchema = new Schema<IHealthBreakdown>(
    9. Simulation Month (per-cycle snapshot)
    ═══════════════════════════════════════════════════════════ */
 
+export interface IInvestmentPL {
+  totalInvested: number;
+  currentValue: number;
+  gain: number;
+  gainPercent: number;
+  sipDeductedThisMonth: number;
+  marketReturnThisMonth: number;
+}
+
+export interface IDebtDetail {
+  type: string;
+  principal: number;
+  outstanding: number;
+  emiPaid: number;
+  interestPortion: number;
+  principalPortion: number;
+  missed: boolean;
+}
+
+export interface IGoalSnapshot {
+  goalId: string;
+  name: string;
+  type: string;
+  targetAmount: number;
+  currentAmount: number;
+  previousAmount: number;
+  changeThisMonth: number;
+  progress: number;
+  status: string;
+  whatDrivesIt: string;
+}
+
 export interface ISimulationMonth {
   simulation: Types.ObjectId;
   monthNumber: number;
@@ -536,6 +570,16 @@ export interface ISimulationMonth {
   isFastForwarded: boolean;
   /** Concept card titles encountered this month (from canonical 10) */
   conceptsEncountered: string[];
+  /** AI-generated monthly insight analyzing the user's decisions and financial state */
+  aiInsight?: string;
+  /** Investment profit/loss breakdown for the month */
+  investmentPL?: IInvestmentPL;
+  /** Per-debt breakdown showing principal/interest split */
+  debtDetails?: IDebtDetail[];
+  /** Goal snapshots showing how each goal changed this month */
+  goalSnapshots?: IGoalSnapshot[];
+  /** Plain-English narrative explaining all budget movements */
+  budgetImpactNarrative?: string;
 }
 
 export interface ISimulationMonthDocument extends ISimulationMonth, Document {}
@@ -568,7 +612,47 @@ const simulationMonthSchema = new Schema<ISimulationMonthDocument>(
     healthBreakdown: { type: healthBreakdownSchema, default: () => ({}) },
     xpEarned: { type: Number, default: 0 },
     isFastForwarded: { type: Boolean, default: false },
-    conceptsEncountered: { type: [String], default: [] }
+    conceptsEncountered: { type: [String], default: [] },
+    aiInsight: { type: String, default: '' },
+    investmentPL: {
+      type: {
+        totalInvested: Number,
+        currentValue: Number,
+        gain: Number,
+        gainPercent: Number,
+        sipDeductedThisMonth: Number,
+        marketReturnThisMonth: Number
+      },
+      _id: false
+    },
+    debtDetails: {
+      type: [{
+        type: { type: String },
+        principal: Number,
+        outstanding: Number,
+        emiPaid: Number,
+        interestPortion: Number,
+        principalPortion: Number,
+        missed: Boolean
+      }],
+      default: []
+    },
+    goalSnapshots: {
+      type: [{
+        goalId: String,
+        name: String,
+        type: { type: String },
+        targetAmount: Number,
+        currentAmount: Number,
+        previousAmount: Number,
+        changeThisMonth: Number,
+        progress: Number,
+        status: String,
+        whatDrivesIt: String
+      }],
+      default: []
+    },
+    budgetImpactNarrative: { type: String, default: '' }
   },
   { timestamps: true }
 );

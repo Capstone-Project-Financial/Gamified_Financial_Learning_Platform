@@ -14,7 +14,7 @@ export interface DecisionOptionTemplate {
   optionId: string;
   label: string;
   description: string;
-  immediateEffect: { balance?: number; savings?: number; debt?: number };
+  immediateEffect: { balance?: number; savings?: number; debt?: number; investment?: number };
   futureEffect?: {
     monthsAffected: number;
     monthlyImpact: number;

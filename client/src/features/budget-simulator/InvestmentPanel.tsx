@@ -47,6 +47,8 @@ export default function InvestmentPanel() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [loading, setLoading] = useState(true);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [aiAdvice, setAiAdvice] = useState<string>("");
+  const [loadingAdvice, setLoadingAdvice] = useState(false);
 
   const fetchInvestments = useCallback(async () => {
     if (!simulation) return;
@@ -165,6 +167,43 @@ export default function InvestmentPanel() {
           </Card>
         </div>
       )}
+
+      {/* AI Investment Advice */}
+      <Card className="border-purple-700/40 bg-gradient-to-br from-purple-950/30 to-indigo-950/20 backdrop-blur-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2 text-purple-300">
+            <span>✨</span> AI Investment Strategy
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {aiAdvice ? (
+            <div>
+              <p className="text-sm leading-relaxed text-gray-300">{aiAdvice}</p>
+              <span className="text-[9px] mt-2 inline-block px-2 py-0.5 rounded-full bg-purple-800/60 text-purple-300 border border-purple-600/30">
+                Powered by Gemini AI
+              </span>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (!simulation) return;
+                setLoadingAdvice(true);
+                try {
+                  const result = await api.get<any>(`/budget-simulator/simulation/${simulation._id}/ai-portfolio-advice`);
+                  if (result?.data?.investmentAdvice) setAiAdvice(result.data.investmentAdvice);
+                } catch {}
+                setLoadingAdvice(false);
+              }}
+              disabled={loadingAdvice}
+              className="w-full border-purple-700/40 hover:bg-purple-900/20"
+            >
+              {loadingAdvice ? "Analyzing..." : "Get AI Investment Advice"}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Active Investments */}
       {activeInvestments.length === 0 && withdrawnInvestments.length === 0 ? (

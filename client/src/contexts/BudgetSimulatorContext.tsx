@@ -92,6 +92,38 @@ export interface BehaviorMetrics {
   budgetAdherenceHistory: number[];
 }
 
+export interface InvestmentPL {
+  totalInvested: number;
+  currentValue: number;
+  gain: number;
+  gainPercent: number;
+  sipDeductedThisMonth: number;
+  marketReturnThisMonth: number;
+}
+
+export interface DebtDetail {
+  type: string;
+  principal: number;
+  outstanding: number;
+  emiPaid: number;
+  interestPortion: number;
+  principalPortion: number;
+  missed: boolean;
+}
+
+export interface GoalSnapshot {
+  goalId: string;
+  name: string;
+  type: string;
+  targetAmount: number;
+  currentAmount: number;
+  previousAmount: number;
+  changeThisMonth: number;
+  progress: number;
+  status: string;
+  whatDrivesIt: string;
+}
+
 export interface SimulationMonth {
   _id: string;
   monthNumber: number;
@@ -125,6 +157,11 @@ export interface SimulationMonth {
   isFastForwarded: boolean;
   budgetUsed: BudgetAllocation;
   conceptsEncountered?: string[];
+  aiInsight?: string;
+  investmentPL?: InvestmentPL;
+  debtDetails?: DebtDetail[];
+  goalSnapshots?: GoalSnapshot[];
+  budgetImpactNarrative?: string;
 }
 
 export interface MadeDecision {
@@ -134,7 +171,7 @@ export interface MadeDecision {
   behaviorTag: string;
   explanation?: string;
   counterfactual?: string;
-  immediateEffect: { balance?: number; savings?: number; debt?: number };
+  immediateEffect: { balance?: number; savings?: number; debt?: number; investment?: number };
   xpModifier: number;
 }
 

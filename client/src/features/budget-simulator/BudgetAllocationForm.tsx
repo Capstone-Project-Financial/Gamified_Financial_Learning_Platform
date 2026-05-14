@@ -88,16 +88,20 @@ export default function BudgetAllocationForm() {
   };
 
   const applySuggested = () => {
+    const rent = Math.floor(income * 0.25);
+    const food = Math.floor(income * 0.15);
+    const transport = Math.floor(income * 0.08);
+    const entertainment = Math.floor(income * 0.05);
+    const subscriptions = Math.floor(income * 0.03);
+    const savings = Math.floor(income * 0.20);
+    const investment = Math.floor(income * 0.10);
+    const emergencyFund = Math.floor(income * 0.09);
+    
+    // Allocate any rounding remainder to miscellaneous to ensure total perfectly perfectly matches income
+    const miscellaneous = income - (rent + food + transport + entertainment + subscriptions + savings + investment + emergencyFund);
+
     setAllocations({
-      rent: Math.round(income * 0.25),
-      food: Math.round(income * 0.15),
-      transport: Math.round(income * 0.08),
-      entertainment: Math.round(income * 0.05),
-      subscriptions: Math.round(income * 0.03),
-      savings: Math.round(income * 0.20),
-      investment: Math.round(income * 0.10),
-      emergencyFund: Math.round(income * 0.09),
-      miscellaneous: Math.round(income * 0.05),
+      rent, food, transport, entertainment, subscriptions, savings, investment, emergencyFund, miscellaneous
     });
   };
 

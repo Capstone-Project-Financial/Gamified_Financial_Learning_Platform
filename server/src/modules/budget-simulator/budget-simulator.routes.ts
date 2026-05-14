@@ -63,4 +63,8 @@ router.post('/simulation/:id/investments/withdraw', ctrl.withdrawInvestment);
 router.get('/simulation/:id/logs', ctrl.getSimulationLogs);
 router.get('/simulation/:id/logs/:monthNum', ctrl.getMonthLogs);
 
+/* ── AI Suggestions ── */
+router.get('/simulation/:id/ai-goal-suggestions', ctrl.getAIGoalSuggestions);
+router.get('/simulation/:id/ai-portfolio-advice', ctrl.getAIPortfolioAdvice);
+
 export default router;

@@ -3,7 +3,7 @@ import ApiError from '../../utils/ApiError';
 import { SIM_CONFIG } from './budget-simulator.config';
 import { SimulationLogger } from './budget-simulator.logger';
 import { generateMonthEvents, generateEventSeed, getEventTemplate, scaleDecisionOptions, computeImpactAmount } from './budget-simulator.events';
-import { generateMonthEventsViaAI } from './budget-simulator.ai';
+import { generateMonthEventsViaAI, generateMonthlyInsight, generateGoalSuggestions, generatePortfolioAdvice, generateBudgetNarrative } from './budget-simulator.ai';
 import { evaluateMonthGamification, awardXp } from './budget-simulator.gamification';
 import {
   FinancialProfileModel,
@@ -18,7 +18,10 @@ import {
   IFinancialProfileDocument,
   ITriggeredEvent,
   IHealthBreakdown,
-  IBehavioralReport
+  IBehavioralReport,
+  IInvestmentPL,
+  IDebtDetail,
+  IGoalSnapshot
 } from '../../models/BudgetSimulator';
 import { CANONICAL_CONCEPTS } from '../../data/budget-simulator-events';
 import { generateAICoachingReport, SimulationDataForAI } from './budget-simulator.ai';
@@ -446,6 +449,11 @@ async function runMonthCycle(
     const activeDebts = await DebtModel.find({ simulation: sim._id, status: 'active' });
     const totalDebtAmount = activeDebts.reduce((sum, d) => sum + d.outstandingBalance, 0);
 
+    const activeGoals = sim.goals.filter(g => g.status === 'active').map(g => ({ name: g.name, targetAmount: g.targetAmount, currentAmount: g.currentAmount }));
+    const investments = await InvestmentModel.find({ simulation: sim._id, status: 'active' });
+    const activeInvestments = investments.map(i => ({ type: i.type, currentValue: i.currentValue }));
+    const formattedDebts = activeDebts.map(d => ({ name: d.type, outstandingBalance: d.outstandingBalance }));
+
     let events: ITriggeredEvent[] | null = null;
     
     // Attempt AI Generation
@@ -456,7 +464,10 @@ async function runMonthCycle(
         lifestyleLevel: profile.lifestyleLevel,
         totalSavings: sim.currentBalance,
         totalDebt: totalDebtAmount,
-        recentEvents: recentEventIds
+        recentEvents: recentEventIds,
+        activeGoals: activeGoals,
+        activeDebts: formattedDebts,
+        activeInvestments: activeInvestments
     });
 
     if (!events) {
@@ -484,6 +495,16 @@ async function runMonthCycle(
     }
 
     month.events = events;
+
+    // Sanitize AI categories - force to valid enum values
+    const validCategories = new Set(['positive', 'negative', 'neutral']);
+    for (const event of month.events) {
+      if (!validCategories.has(event.category)) {
+        // AI sometimes puts theme names (e.g. 'family_obligation') in category.
+        // Default to 'negative' for unknown categories since most events are challenges.
+        event.category = 'negative';
+      }
+    }
 
     // Extract concept card titles for tracking
     const concepts: string[] = [];
@@ -608,8 +629,246 @@ async function runMonthCycle(
     month.debtBalance = sim.totalDebt;
     month.investmentValue = sim.totalInvestmentValue;
 
+    // ── Capture goal snapshots BEFORE updating progress ──
+    const goalSnapshotsBefore = sim.goals.map(g => ({
+      goalId: g.goalId,
+      name: g.name,
+      type: g.type,
+      targetAmount: g.targetAmount,
+      previousAmount: g.currentAmount,
+      status: g.status
+    }));
+
     // Update goals
     updateGoalProgress(sim);
+
+    // ── Investment P&L ──
+    const activeInvestment = await InvestmentModel.findOne({ simulation: sim._id, status: 'active' });
+    const sipAmount = sim.currentBudget.investment || 0;
+    if (activeInvestment) {
+      const gain = activeInvestment.currentValue - activeInvestment.totalInvested;
+      const gainPercent = activeInvestment.totalInvested > 0
+        ? Math.round((gain / activeInvestment.totalInvested) * 10000) / 100
+        : 0;
+      // Calculate market return this month from latest history entry
+      const latestHistory = activeInvestment.monthlyHistory.find(h => h.month === month.monthNumber);
+      const prevHistory = activeInvestment.monthlyHistory.find(h => h.month === month.monthNumber - 1);
+      const prevValue = prevHistory?.value || 0;
+      const marketReturn = latestHistory ? latestHistory.value - prevValue - sipAmount : 0;
+
+      month.investmentPL = {
+        totalInvested: activeInvestment.totalInvested,
+        currentValue: activeInvestment.currentValue,
+        gain,
+        gainPercent,
+        sipDeductedThisMonth: sipAmount,
+        marketReturnThisMonth: Math.round(marketReturn)
+      };
+    } else if (sipAmount > 0) {
+      // Portfolio was withdrawn but SIP still allocated
+      month.investmentPL = {
+        totalInvested: 0, currentValue: 0, gain: 0, gainPercent: 0,
+        sipDeductedThisMonth: sipAmount, marketReturnThisMonth: 0
+      };
+    }
+
+    // ── Debt Details ──
+    const allDebtsForReport = await DebtModel.find({ simulation: sim._id });
+    const activeDebtsForReport = allDebtsForReport.filter(d => d.status === 'active' || d.status === 'paid_off');
+    const debtDetails: IDebtDetail[] = [];
+    for (const debt of activeDebtsForReport) {
+      const emiExpense = month.fixedExpenses.find(e => e.category === `emi_${debt.type}`);
+      const emiPaid = emiExpense?.amount || 0;
+      const interestPortion = emiPaid > 0 ? Math.round(debt.outstandingBalance * debt.interestRate) : 0;
+      const principalPortion = emiPaid > 0 ? emiPaid - interestPortion : 0;
+      const missed = !emiExpense && debt.status === 'active';
+      debtDetails.push({
+        type: debt.type,
+        principal: debt.principal,
+        outstanding: debt.outstandingBalance,
+        emiPaid,
+        interestPortion: Math.max(0, interestPortion),
+        principalPortion: Math.max(0, principalPortion),
+        missed
+      });
+    }
+    month.debtDetails = debtDetails;
+
+    // ── Goal Snapshots (with change tracking) ──
+    const goalTypeDrivers: Record<string, string> = {
+      'savings_target': 'Driven by your total savings balance — grows when you allocate to savings in your budget',
+      'purchase': 'Tracked by savings — when savings reach the target, the purchase amount is auto-deducted from your balance',
+      'emergency_fund': 'Driven by your emergency fund allocation in your monthly budget',
+      'investment_milestone': 'Tracked by your SIP portfolio value — grows from monthly SIP + market returns',
+      'debt_payoff': 'Progress = original debt minus current outstanding — grows as your EMI payments reduce the debt'
+    };
+    month.goalSnapshots = sim.goals.map(g => {
+      const before = goalSnapshotsBefore.find(b => b.goalId === g.goalId);
+      const prev = before?.previousAmount || 0;
+      const change = g.currentAmount - prev;
+      return {
+        goalId: g.goalId,
+        name: g.name,
+        type: g.type,
+        targetAmount: g.targetAmount,
+        currentAmount: g.currentAmount,
+        previousAmount: prev,
+        changeThisMonth: change,
+        progress: g.targetAmount > 0 ? Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100)) : 0,
+        status: g.status,
+        whatDrivesIt: goalTypeDrivers[g.type] || g.type
+      };
+    });
+
+    // ── Budget Impact Narrative (deterministic, always available) ──
+    const emiExpensesList = month.fixedExpenses.filter(e => e.category.startsWith('emi_'));
+    const totalEmi = emiExpensesList.reduce((s, e) => s + e.amount, 0);
+    const regularExpenses = month.fixedExpenses.filter(e => !e.category.startsWith('emi_') && e.category !== 'savings' && e.category !== 'emergencyFund' && e.category !== 'investment');
+    const totalRegularSpend = regularExpenses.reduce((s, e) => s + e.amount, 0);
+    const savingsAlloc = sim.currentBudget.savings || 0;
+    const efAlloc = sim.currentBudget.emergencyFund || 0;
+    const balanceChange = month.balanceEnd - month.balanceStart;
+
+    let narrative = `Month ${month.monthNumber}: You earned ₹${profile.monthlyIncome.toLocaleString('en-IN')} as salary. `;
+    narrative += `Your living expenses (rent, food, transport, etc.) cost ₹${totalRegularSpend.toLocaleString('en-IN')} (${Math.round((totalRegularSpend / profile.monthlyIncome) * 100)}% of income). `;
+    if (savingsAlloc > 0) narrative += `You saved ₹${savingsAlloc.toLocaleString('en-IN')} (total savings now: ₹${sim.totalSavings.toLocaleString('en-IN')}). `;
+    if (efAlloc > 0) narrative += `₹${efAlloc.toLocaleString('en-IN')} went to your emergency fund (total: ₹${sim.emergencyFund.toLocaleString('en-IN')}). `;
+    if (sipAmount > 0 && month.investmentPL) {
+      narrative += `Your SIP deducted ₹${sipAmount.toLocaleString('en-IN')} from your balance into your investment portfolio. `;
+      if (month.investmentPL.gain !== 0) {
+        const plWord = month.investmentPL.gain >= 0 ? 'gain' : 'loss';
+        narrative += `Portfolio is now ₹${month.investmentPL.currentValue.toLocaleString('en-IN')} (unrealized ${plWord}: ₹${Math.abs(month.investmentPL.gain).toLocaleString('en-IN')}, ${month.investmentPL.gainPercent}%). This is NOT a cost — it's money moved from cash to investments. `;
+      }
+    }
+    if (totalEmi > 0) {
+      narrative += `Your loan EMI of ₹${totalEmi.toLocaleString('en-IN')} was auto-deducted to repay debt. `;
+      for (const dd of debtDetails) {
+        if (dd.emiPaid > 0) {
+          narrative += `(${dd.type.replace(/_/g, ' ')}: ₹${dd.principalPortion.toLocaleString('en-IN')} went to principal, ₹${dd.interestPortion.toLocaleString('en-IN')} was interest — ₹${dd.outstanding.toLocaleString('en-IN')} still outstanding). `;
+        }
+        if (dd.missed) {
+          narrative += `⚠️ You MISSED the ${dd.type.replace(/_/g, ' ')} EMI payment because of insufficient balance — 1.5x penalty interest was applied! `;
+        }
+      }
+    }
+    // Events
+    for (const event of month.events) {
+      if (event.requiresDecision && event.decisionMade) {
+        const dec = event.decisionMade;
+        narrative += `Then "${event.title}" happened — you chose "${dec.label}". `;
+        if (dec.immediateEffect.balance && dec.immediateEffect.balance < 0) {
+          narrative += `This cost ₹${Math.abs(dec.immediateEffect.balance).toLocaleString('en-IN')} from your balance. `;
+        }
+        if (dec.immediateEffect.savings && dec.immediateEffect.savings < 0) {
+          narrative += `₹${Math.abs(dec.immediateEffect.savings).toLocaleString('en-IN')} was used from your savings. `;
+        }
+        if (dec.immediateEffect.debt && dec.immediateEffect.debt > 0) {
+          narrative += `This added ₹${dec.immediateEffect.debt.toLocaleString('en-IN')} to your debt (EMI starts next month). `;
+        }
+        if (dec.immediateEffect.investment) {
+          const inv = dec.immediateEffect.investment;
+          narrative += inv > 0
+            ? `₹${inv.toLocaleString('en-IN')} was added to your investment portfolio. `
+            : `₹${Math.abs(inv).toLocaleString('en-IN')} was withdrawn from your portfolio. `;
+        }
+        narrative += `This was a ${dec.behaviorTag} decision. `;
+      } else if (!event.requiresDecision) {
+        if (event.category === 'positive') {
+          narrative += `A positive event "${event.title}" added ₹${event.financialImpact.toLocaleString('en-IN')} to your balance. `;
+        } else if (event.category === 'negative') {
+          narrative += `An unexpected expense "${event.title}" cost ₹${event.financialImpact.toLocaleString('en-IN')}. `;
+        }
+      }
+    }
+    // Goals impact
+    const completedGoals = (month.goalSnapshots || []).filter(g => g.status === 'completed' && g.previousAmount < g.targetAmount);
+    for (const cg of completedGoals) {
+      if (cg.type === 'purchase') {
+        narrative += `🎉 Goal "${cg.name}" completed! ₹${cg.targetAmount.toLocaleString('en-IN')} was deducted from your balance for the purchase. `;
+      } else {
+        narrative += `🎉 Goal "${cg.name}" completed! `;
+      }
+    }
+    narrative += `Final balance: ₹${sim.currentBalance.toLocaleString('en-IN')}. `;
+    if (balanceChange > 0) {
+      narrative += `Your balance grew by ₹${balanceChange.toLocaleString('en-IN')} this month.`;
+    } else if (balanceChange < 0) {
+      narrative += `Your balance decreased by ₹${Math.abs(balanceChange).toLocaleString('en-IN')} this month.`;
+    }
+
+    month.budgetImpactNarrative = narrative;
+
+    // Generate AI Monthly Insight (enhances the deterministic narrative)
+    try {
+      const lastDecision = month.decisions[month.decisions.length - 1];
+      const lastEvent = month.events.find(e => e.decisionMade);
+      const goalsSummary = sim.goals.filter(g => g.status === 'active').map(g => `${g.name}: ${Math.round((g.currentAmount / g.targetAmount) * 100)}%`).join(', ');
+
+      const insight = await generateMonthlyInsight({
+        monthNumber: month.monthNumber,
+        monthlyIncome: profile.monthlyIncome,
+        balanceStart: month.balanceStart,
+        balanceEnd: sim.currentBalance,
+        totalSavings: sim.totalSavings,
+        totalDebt: sim.totalDebt,
+        investmentValue: sim.totalInvestmentValue,
+        emergencyFund: sim.emergencyFund,
+        healthScore: month.healthScore,
+        sipInvested: sipAmount,
+        emiPaid: totalEmi,
+        eventTitle: lastEvent?.title || 'No event',
+        decisionLabel: lastDecision?.label || 'No decision',
+        decisionTag: lastDecision?.behaviorTag || 'neutral',
+        goalsSummary
+      });
+      if (insight) {
+        month.aiInsight = insight;
+      }
+    } catch (e) {
+      console.error('[AI Insight] Error generating insight:', e);
+    }
+
+    // Try AI-enhanced narrative (replaces deterministic if available)
+    try {
+      const aiNarrative = await generateBudgetNarrative({
+        monthNumber: month.monthNumber,
+        monthlyIncome: profile.monthlyIncome,
+        balanceStart: month.balanceStart,
+        balanceEnd: sim.currentBalance,
+        totalSavings: sim.totalSavings,
+        emergencyFund: sim.emergencyFund,
+        totalDebt: sim.totalDebt,
+        investmentPL: month.investmentPL || null,
+        debtDetails: month.debtDetails || [],
+        decisions: month.decisions.map(d => ({
+          eventTitle: month.events.find(e => e.eventId === d.eventId)?.title || d.eventId,
+          choiceLabel: d.label,
+          behaviorTag: d.behaviorTag,
+          balanceEffect: d.immediateEffect.balance || 0,
+          savingsEffect: d.immediateEffect.savings || 0,
+          debtEffect: d.immediateEffect.debt || 0,
+          investmentEffect: d.immediateEffect.investment || 0
+        })),
+        autoEvents: month.events.filter(e => !e.requiresDecision).map(e => ({
+          title: e.title,
+          category: e.category,
+          impact: e.financialImpact
+        })),
+        livingExpenses: totalRegularSpend,
+        savingsAllocated: savingsAlloc,
+        efAllocated: efAlloc,
+        sipAllocated: sipAmount,
+        emiTotal: totalEmi,
+        goalSnapshots: month.goalSnapshots || [],
+        healthScore: month.healthScore
+      });
+      if (aiNarrative) {
+        month.budgetImpactNarrative = aiNarrative;
+      }
+    } catch (e) {
+      // Keep deterministic narrative — already set above
+      console.error('[AI Narrative] Error, keeping deterministic narrative:', e);
+    }
 
     month.cycleStep = CycleStep.REPORT_GENERATED;
     month.status = 'completed';
@@ -659,13 +918,17 @@ export const getPendingDecisions = async (simulationId: string, userId: string) 
   const pending = month.events
     .filter((e) => e.requiresDecision && !e.resolved)
     .map((e: any) => {
-      const template = getEventTemplate(e.eventId);
-      const optionsArray = e.dynamicOptions && e.dynamicOptions.length > 0 ? e.dynamicOptions : (template?.decisions || []);
-      const scaledDecisions = scaleDecisionOptions(optionsArray as any, e.financialImpact);
+      const eventObj = typeof e.toObject === 'function' ? e.toObject() : e;
+      const template = getEventTemplate(eventObj.eventId);
+      const optionsArray = eventObj.dynamicOptions && eventObj.dynamicOptions.length > 0 
+        ? eventObj.dynamicOptions 
+        : (template?.decisions || []);
+      const scaledDecisions = scaleDecisionOptions(optionsArray as any, eventObj.financialImpact);
+      
       return {
-        ...e.toObject(),
+        ...eventObj,
         conceptCard: template?.conceptCard || null,
-        availableOptions: scaledDecisions.map((d, idx) => ({
+        availableOptions: scaledDecisions.map((d: any, idx: number) => ({
           optionId: d.optionId,
           label: d.label,
           description: d.description,
@@ -674,8 +937,8 @@ export const getPendingDecisions = async (simulationId: string, userId: string) 
           xpModifier: d.xpModifier,
           behaviorTag: d.behaviorTag,
           disabled: checkOptionDisabled(d, sim),
-          explanation: template?.decisions[idx]?.explanation || '',
-          counterfactual: template?.decisions[idx]?.counterfactual || ''
+          explanation: d.explanation || template?.decisions?.[idx]?.explanation || '',
+          counterfactual: d.counterfactual || template?.decisions?.[idx]?.counterfactual || ''
         }))
       };
     });
@@ -717,7 +980,8 @@ export const submitDecision = async (
   if (!option) throw new ApiError(404, 'Decision option not found');
 
   // Scale and apply
-  const scaled = scaleDecisionOptions([option], event.financialImpact)[0];
+  const optionToScale = typeof (option as any).toObject === 'function' ? (option as any).toObject() : option;
+  const scaled = scaleDecisionOptions([optionToScale], event.financialImpact)[0];
 
   // Check if option is valid
   if (scaled.requiresSavings && sim.totalSavings < Math.abs(scaled.immediateEffect.savings || 0)) {
@@ -744,7 +1008,8 @@ export const submitDecision = async (
     immediateEffect: {
       balance: scaled.immediateEffect.balance || undefined,
       savings: scaled.immediateEffect.savings || undefined,
-      debt: scaled.immediateEffect.debt || undefined
+      debt: scaled.immediateEffect.debt || undefined,
+      investment: scaled.immediateEffect.investment || undefined
     },
     futureEffect: scaled.futureEffect ? { ...scaled.futureEffect, remainingMonths: scaled.futureEffect.monthsAffected } : undefined,
     xpModifier: scaled.xpModifier,
@@ -910,6 +1175,52 @@ export const getMonthLogs = async (simulationId: string, userId: string, monthNu
   const sim = await SimulationModel.findOne({ _id: simulationId, user: userId });
   if (!sim) throw new ApiError(404, 'Simulation not found');
   return SimulationLogger.getMonthLogs(simulationId, monthNum);
+};
+
+/* ═══════════════════════════════════════════════════════════
+   AI SUGGESTIONS
+   ═══════════════════════════════════════════════════════════ */
+
+export const getAIGoalSuggestions = async (simulationId: string, userId: string) => {
+  const sim = await SimulationModel.findOne({ _id: simulationId, user: userId });
+  if (!sim) throw new ApiError(404, 'Simulation not found');
+
+  const profile = await FinancialProfileModel.findOne({ user: userId });
+  if (!profile) throw new ApiError(404, 'Profile not found');
+
+  const investments = await InvestmentModel.find({ simulation: simulationId, status: 'active' });
+  const investmentValue = investments.reduce((s, i) => s + i.currentValue, 0);
+  const existingGoalNames = sim.goals.map(g => g.name);
+
+  return generateGoalSuggestions(
+    profile.monthlyIncome,
+    sim.totalSavings,
+    sim.totalDebt,
+    investmentValue,
+    existingGoalNames
+  );
+};
+
+export const getAIPortfolioAdvice = async (simulationId: string, userId: string) => {
+  const sim = await SimulationModel.findOne({ _id: simulationId, user: userId });
+  if (!sim) throw new ApiError(404, 'Simulation not found');
+
+  const profile = await FinancialProfileModel.findOne({ user: userId });
+  if (!profile) throw new ApiError(404, 'Profile not found');
+
+  const debts = await DebtModel.find({ simulation: simulationId, status: 'active' });
+  const totalEmi = debts.reduce((s, d) => s + d.emiAmount, 0);
+  const sipAmount = sim.currentBudget.investment || 0;
+
+  return generatePortfolioAdvice(
+    profile.monthlyIncome,
+    sim.totalSavings,
+    sim.totalDebt,
+    sim.totalInvestmentValue,
+    sipAmount,
+    totalEmi,
+    sim.healthScore
+  );
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -1216,7 +1527,7 @@ function calculateHealthScore(
 
 function applyDecisionEffects(
   sim: ISimulationDocument,
-  decision: { immediateEffect: { balance?: number; savings?: number; debt?: number }; futureEffect?: { monthsAffected: number; monthlyImpact: number; type: string } },
+  decision: { immediateEffect: { balance?: number; savings?: number; debt?: number; investment?: number }; futureEffect?: { monthsAffected: number; monthlyImpact: number; type: string } },
   _month: ISimulationMonthDocument
 ) {
   if (decision.immediateEffect.balance) {
@@ -1225,6 +1536,29 @@ function applyDecisionEffects(
   if (decision.immediateEffect.savings) {
     sim.totalSavings += decision.immediateEffect.savings;
     if (sim.totalSavings < 0) sim.totalSavings = 0;
+  }
+  if (decision.immediateEffect.investment) {
+    const invAmount = decision.immediateEffect.investment;
+    InvestmentModel.findOne({ simulation: sim._id, status: 'active' }).then(inv => {
+      if (inv) {
+        inv.currentValue += invAmount;
+        if (inv.currentValue <= 0) {
+          inv.currentValue = 0;
+          inv.status = 'withdrawn';
+        }
+        inv.save().catch(() => {});
+      } else if (invAmount > 0) {
+        InvestmentModel.create({
+          simulation: sim._id,
+          type: 'mutual_fund',
+          principal: invAmount,
+          currentValue: invAmount,
+          monthlySip: 0,
+          annualReturnRate: 0.12,
+          startedAtMonth: sim.currentMonth
+        }).catch(() => {});
+      }
+    }).catch(() => {});
   }
   if (decision.immediateEffect.debt && decision.immediateEffect.debt > 0) {
     // Create a new debt entry
@@ -1279,9 +1613,16 @@ function updateGoalProgress(sim: ISimulationDocument) {
         break;
     }
 
-    if (goal.currentAmount >= goal.targetAmount) {
+    if (goal.currentAmount >= goal.targetAmount && goal.status === 'active') {
       goal.status = 'completed';
       goal.completedAtMonth = sim.currentMonth;
+
+      // For purchase goals, deduct the target amount from balance/savings
+      // This makes "Buy a Car ₹100,000" actually cost money
+      if (goal.type === 'purchase') {
+        sim.currentBalance -= goal.targetAmount;
+        sim.totalSavings = Math.max(0, sim.totalSavings - goal.targetAmount);
+      }
     }
   }
 }

@@ -164,3 +164,15 @@ export const getMonthLogs = asyncHandler(async (req: Request, res: Response) => 
   const logs = await service.getMonthLogs(req.params.id, req.user!.id, parseInt(req.params.monthNum));
   sendSuccess(res, logs);
 });
+
+/* ── AI Suggestions ── */
+
+export const getAIGoalSuggestions = asyncHandler(async (req: Request, res: Response) => {
+  const suggestions = await service.getAIGoalSuggestions(req.params.id, req.user!.id);
+  sendSuccess(res, suggestions, suggestions ? 'AI goal suggestions generated' : 'AI suggestions unavailable');
+});
+
+export const getAIPortfolioAdvice = asyncHandler(async (req: Request, res: Response) => {
+  const advice = await service.getAIPortfolioAdvice(req.params.id, req.user!.id);
+  sendSuccess(res, advice, advice ? 'AI advice generated' : 'AI advice unavailable');
+});

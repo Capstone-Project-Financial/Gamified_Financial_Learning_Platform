@@ -121,6 +121,30 @@ export default function SimulationDashboard() {
         </CardContent>
       </Card>
 
+      {/* AI Financial Position — from last completed month */}
+      {(() => {
+        const lastCompleted = [...completedMonths].sort((a, b) => b.monthNumber - a.monthNumber)[0];
+        const aiInsight = lastCompleted?.aiInsight;
+        if (!aiInsight) return null;
+        return (
+          <Card className="border-purple-700/40 bg-gradient-to-br from-purple-950/40 to-indigo-950/30 backdrop-blur-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-purple-300 text-sm">
+                <span>✨</span> AI Financial Summary (Month {lastCompleted.monthNumber})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-relaxed text-gray-300">{aiInsight}</p>
+              <div className="mt-2">
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-purple-800/60 text-purple-300 border border-purple-600/30">
+                  Powered by Gemini AI
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* 12-month Trend Chart */}
       {chartData.length > 0 && (
         <Card className="border-border/50 bg-card/50 backdrop-blur-sm">

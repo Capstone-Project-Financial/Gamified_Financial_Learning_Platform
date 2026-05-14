@@ -68,9 +68,10 @@ export function scaleDecisionOptions(
   return decisions.map((d) => ({
     ...d,
     immediateEffect: {
-      balance: d.immediateEffect.balance ? Math.round(d.immediateEffect.balance * impactAmount) : undefined,
-      savings: d.immediateEffect.savings ? Math.round(d.immediateEffect.savings * impactAmount) : undefined,
-      debt: d.immediateEffect.debt ? Math.round(d.immediateEffect.debt * impactAmount) : undefined
+      balance: d.immediateEffect?.balance ? Math.round(d.immediateEffect.balance * impactAmount) : undefined,
+      savings: d.immediateEffect?.savings ? Math.round(d.immediateEffect.savings * impactAmount) : undefined,
+      debt: d.immediateEffect?.debt ? Math.round(d.immediateEffect.debt * impactAmount) : undefined,
+      investment: d.immediateEffect?.investment ? Math.round(d.immediateEffect.investment * impactAmount) : undefined
     },
     futureEffect: d.futureEffect
       ? {

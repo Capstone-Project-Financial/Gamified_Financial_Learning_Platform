@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DecisionOption } from "@/contexts/BudgetSimulatorContext";
+import { Sparkles } from "lucide-react";
 
 interface EventDecisionCardProps {
   event: {
@@ -22,6 +23,7 @@ export default function EventDecisionCard({ event, onDecide }: EventDecisionCard
   const [confirming, setConfirming] = useState(false);
 
   const options = event.availableOptions || [];
+  const isAIGenerated = event.eventId.startsWith("ai-gen");
 
   const handleChoice = (index: number) => {
     if (revealed || confirming) return;
@@ -66,11 +68,19 @@ export default function EventDecisionCard({ event, onDecide }: EventDecisionCard
       )}
 
       {/* Event header */}
-      <div className="flex justify-between items-start mb-3">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 gap-2">
         <h3 className="text-base font-medium text-white">{event.title}</h3>
-        <span className="text-sm text-gray-400">
-          Impact: ₹{Math.abs(event.financialImpact).toLocaleString("en-IN")}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {isAIGenerated && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-900/50 border border-indigo-700/50 text-[10px] font-medium text-indigo-300">
+              <Sparkles className="h-3 w-3" />
+              AI Generated
+            </span>
+          )}
+          <span className="text-sm text-gray-400">
+            Impact: ₹{Math.abs(event.financialImpact).toLocaleString("en-IN")}
+          </span>
+        </div>
       </div>
       <p className="text-sm text-gray-300 mb-4">{event.description}</p>
 

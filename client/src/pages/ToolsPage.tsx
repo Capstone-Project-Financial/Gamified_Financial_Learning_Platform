@@ -1,6 +1,7 @@
 /** @format */
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -35,6 +36,7 @@ const COLORS = [
 
 export default function Tools() {
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   return (
     <div className="p-6 space-y-6">
@@ -43,14 +45,14 @@ export default function Tools() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card
           className="p-6 hover:shadow-lg transition-shadow cursor-pointer"
-          onClick={() => setActiveTool("budget")}
+          onClick={() => navigate("/budget-simulator")}
         >
           <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
             <PiggyBank className="w-8 h-8 text-primary" />
           </div>
           <h3 className="text-xl font-bold mb-2">Budget Simulator</h3>
           <p className="text-muted-foreground mb-4">
-            Practice creating budgets with different income levels
+            AI-powered budget simulation with life events and financial decisions
           </p>
           <Button className="w-full">Open Tool</Button>
         </Card>
@@ -84,9 +86,7 @@ export default function Tools() {
         </Card>
       </div>
 
-      {activeTool === "budget" && (
-        <BudgetSimulator onClose={() => setActiveTool(null)} />
-      )}
+
       {activeTool === "investment" && (
         <InvestmentCalculator onClose={() => setActiveTool(null)} />
       )}
@@ -97,164 +97,6 @@ export default function Tools() {
   );
 }
 
-function BudgetSimulator({ onClose }: { onClose: () => void }) {
-  const [income, setIncome] = useState(1000);
-  const [budget, setBudget] = useState({
-    savings: 20,
-    supplies: 15,
-    entertainment: 20,
-    snacks: 25,
-    transport: 10,
-    other: 10,
-  });
-
-  const total = Object.values(budget).reduce((sum, val) => sum + val, 0);
-  const amounts = Object.fromEntries(
-    Object.entries(budget).map(([key, percent]) => [
-      key,
-      Math.round((income * percent) / 100),
-    ])
-  );
-
-  const pieData = Object.entries(budget).map(([key, value]) => ({
-    name: key.charAt(0).toUpperCase() + key.slice(1),
-    value,
-  }));
-
-  const updateBudget = (key: string, value: number) => {
-    setBudget({ ...budget, [key]: value });
-  };
-
-  const getScore = () => {
-    let score = 100;
-    if (budget.savings < 15) score -= 20;
-    if (budget.savings > 30) score -= 10;
-    if (budget.entertainment > 30) score -= 15;
-    if (budget.snacks > 30) score -= 10;
-    if (total !== 100) score = 0;
-    return Math.max(0, score);
-  };
-
-  const getFeedback = () => {
-    const score = getScore();
-    if (score >= 85)
-      return {
-        text: "Excellent budget! You're saving well and spending wisely!",
-        color: "text-success",
-      };
-    if (score >= 70)
-      return {
-        text: "Good job! Consider saving a bit more.",
-        color: "text-primary",
-      };
-    if (score >= 50)
-      return {
-        text: "Not bad, but you could balance better.",
-        color: "text-accent",
-      };
-    return {
-      text: "Try to save more and reduce entertainment spending.",
-      color: "text-danger",
-    };
-  };
-
-  const feedback = getFeedback();
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl">Budget Simulator</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Monthly Income: ₹{income}
-            </label>
-            <Slider
-              value={[income]}
-              onValueChange={([val]) => setIncome(val)}
-              min={500}
-              max={50000}
-              step={100}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              {Object.entries(budget).map(([key, value]) => (
-                <div key={key}>
-                  <div className="flex justify-between mb-2">
-                    <label className="text-sm font-medium capitalize">
-                      {key}
-                    </label>
-                    <span className="text-sm">
-                      {value}% (₹{amounts[key]})
-                    </span>
-                  </div>
-                  <Slider
-                    value={[value]}
-                    onValueChange={([val]) => updateBudget(key, val)}
-                    min={0}
-                    max={100}
-                    step={1}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) =>
-                      `${name}: ${(percent * 100).toFixed(0)}%`
-                    }
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <Card className="p-4 bg-muted">
-            <p className="text-sm mb-2">
-              <strong>Total Allocated:</strong> {total}%{" "}
-              {total !== 100 && (
-                <span className="text-danger">(Must equal 100%)</span>
-              )}
-            </p>
-            <p className="text-sm mb-2">
-              <strong>Score:</strong> {getScore()}/100
-            </p>
-            <p className={`text-sm font-medium ${feedback.color}`}>
-              {feedback.text}
-            </p>
-          </Card>
-
-          <Button onClick={onClose} className="w-full">
-            Close
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function InvestmentCalculator({ onClose }: { onClose: () => void }) {
   const [initial, setInitial] = useState(1000);
