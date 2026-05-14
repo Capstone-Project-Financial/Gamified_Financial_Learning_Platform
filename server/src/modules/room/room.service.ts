@@ -31,20 +31,41 @@ export async function createRoom(
   userName: string,
   config?: { totalQuestions?: number; timePerQuestion?: number; topics?: string[] }
 ): Promise<{ code: string; roomId: string }> {
-  // Check if user already has an active room
+  // Check if user already has an active room — auto-cleanup expired ones
   const existingRoom = await BattleRoomModel.findOne({
     createdBy: userId,
     status: { $in: ['waiting', 'ready'] },
   });
 
   if (existingRoom) {
-    throw new ApiError(400, 'You already have an active room. Close it before creating a new one.');
+    // If the room has expired, clean it up instead of blocking
+    if (existingRoom.expiresAt && existingRoom.expiresAt < new Date()) {
+      logger.info({ roomId: existingRoom.id, userId }, 'Auto-cleaning expired stale room');
+      await existingRoom.deleteOne();
+    } else {
+      throw new ApiError(400, 'You already have an active room. Close it before creating a new one.');
+    }
   }
 
-  // Check if user is in battle
+  // Check if user is in battle — clean up stale references
   const user = await UserModel.findById(userId).select('activeBattleId');
   if (user?.activeBattleId) {
-    throw new ApiError(400, 'Cannot create room while in a battle');
+    // Verify the battle actually exists and is still active
+    const activeBattle = await BattleModel.findOne({
+      $or: [
+        { _id: user.activeBattleId },
+        { roomId: user.activeBattleId },
+      ],
+      status: { $in: ['waiting', 'in_progress'] },
+    });
+
+    if (activeBattle) {
+      throw new ApiError(400, 'Cannot create room while in a battle');
+    }
+
+    // Stale reference — clean it up
+    logger.info({ userId, staleId: user.activeBattleId }, 'Cleaning stale activeBattleId');
+    await UserModel.updateOne({ _id: userId }, { $set: { activeBattleId: null } });
   }
 
   // Generate unique code (retry on collision)

@@ -310,7 +310,14 @@ export function BattleProvider({ children }: { children: ReactNode }) {
 
   const createRoom = useCallback(
     (config?: any) => {
-      if (!socket?.connected) return;
+      if (!socket?.connected) {
+        console.warn("[BattleContext] createRoom called but socket not connected:", {
+          socketExists: !!socket,
+          connected: socket?.connected,
+        });
+        return;
+      }
+      console.log("[BattleContext] Emitting create_room", { config });
       socket.emit("create_room", { config });
     },
     [socket]
