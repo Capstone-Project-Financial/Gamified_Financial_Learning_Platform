@@ -30,12 +30,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Swords, Zap, Trophy, Clock, Target, TrendingUp } from "lucide-react";
+import { Swords, Zap, Trophy, Clock, Target, TrendingUp, AlertCircle } from "lucide-react";
 
 const BattlesPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { connected } = useSocket();
+  const { socket, connected } = useSocket();
   const { state, joinQueue, leaveQueue, createRoom, joinRoom, setReady, leaveRoom, reset } = useBattle();
 
   const [history, setHistory] = useState<BattleHistoryItem[]>([]);
@@ -45,10 +45,44 @@ const BattlesPage = () => {
   const [roomCode, setRoomCode] = useState("");
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [activeTab, setActiveTab] = useState("play");
+  const [creatingRoom, setCreatingRoom] = useState(false);
+  const [roomError, setRoomError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Listen for room_error events from server to show user-visible feedback
+  useEffect(() => {
+    if (!socket || !connected) return;
+
+    const onRoomError = (payload: { message: string }) => {
+      console.error("Room error:", payload.message);
+      setRoomError(payload.message);
+      setCreatingRoom(false);
+    };
+
+    const onRoomCreated = () => {
+      setCreatingRoom(false);
+      setRoomError(null);
+    };
+
+    socket.on("room_error", onRoomError);
+    socket.on("room_created", onRoomCreated);
+
+    return () => {
+      socket.off("room_error", onRoomError);
+      socket.off("room_created", onRoomCreated);
+    };
+  }, [socket, connected]);
+
+  // Clear creating state when room is created or phase changes
+  useEffect(() => {
+    if (state.phase === "room_lobby" || state.phase === "room_waiting") {
+      setCreatingRoom(false);
+      setRoomError(null);
+    }
+  }, [state.phase]);
 
   // Navigate to arena when battle starts
   useEffect(() => {
@@ -274,11 +308,32 @@ const BattlesPage = () => {
               <CardContent>
                 <div className="flex gap-3">
                   <Button
-                    onClick={() => createRoom()}
-                    disabled={!connected || state.phase !== "idle"}
+                    onClick={() => {
+                      setCreatingRoom(true);
+                      setRoomError(null);
+                      createRoom();
+                      // Timeout fallback in case server never responds
+                      setTimeout(() => {
+                        setCreatingRoom((prev) => {
+                          if (prev && state.phase === "idle") {
+                            setRoomError("Server did not respond. Please check your connection and try again.");
+                            return false;
+                          }
+                          return prev;
+                        });
+                      }, 8000);
+                    }}
+                    disabled={!connected || state.phase !== "idle" || creatingRoom}
                     className="flex-1 bg-gradient-accent hover:opacity-90 text-white dark:text-foreground font-semibold"
                   >
-                    Create Room
+                    {creatingRoom ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                        Creating...
+                      </span>
+                    ) : (
+                      "Create Room"
+                    )}
                   </Button>
                   <Button
                     onClick={() => setShowJoinDialog(true)}
@@ -289,6 +344,22 @@ const BattlesPage = () => {
                     Join with Code
                   </Button>
                 </div>
+
+                {/* Room Error Feedback */}
+                {roomError && (
+                  <div className="mt-3 p-3 rounded-lg bg-destructive/10 border border-destructive/30 flex items-start gap-2 animate-scale-in">
+                    <AlertCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm text-destructive font-medium">{roomError}</p>
+                      <button
+                        className="text-xs text-destructive/70 hover:text-destructive underline mt-1"
+                        onClick={() => setRoomError(null)}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Room Lobby */}
                 {state.roomCode && (state.phase === "room_lobby" || state.phase === "room_waiting") && (
